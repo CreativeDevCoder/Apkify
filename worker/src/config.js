@@ -41,7 +41,8 @@ export function sanitizeConfig(c) {
     externalLinksInBrowser: bool(f.externalLinksInBrowser), offlinePage: bool(f.offlinePage), geolocation: bool(f.geolocation),
     camera: bool(f.camera), zoom: bool(f.zoom), keepAwake: bool(f.keepAwake), fullscreen: bool(f.fullscreen),
     sideMenu: bool(f.sideMenu), admob: bool(f.admob), onesignal: bool(f.onesignal),
-    cacheMode: ['default', 'cacheElseNetwork', 'noCache'].includes(f.cacheMode) ? f.cacheMode : 'default'
+    cacheMode: ['default', 'cacheElseNetwork', 'noCache'].includes(f.cacheMode) ? f.cacheMode : 'default',
+    encrypt: f.encrypt !== false
   };
   const admob = { appId: str(c.admob?.appId, 80), bannerId: str(c.admob?.bannerId, 80) };
   if (features.admob && !/^ca-app-pub-\d+~\d+$/.test(admob.appId)) throw new HttpError(400, 'AdMob App ID tidak valid');

@@ -17,6 +17,7 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { clearCache } from '../lib/cache';
+import { TEMPLATES } from '../lib/templates';
 import FileDrop from '../components/FileDrop';
 import ColorField from '../components/ColorField';
 import { validatePackage, suggestPackage, normalizeUrl, validateUrl, isHex } from '../lib/validators';
@@ -32,7 +33,7 @@ const DEFAULT = {
   features: {
     pullToRefresh: true, fileUpload: true, downloads: true, externalLinksInBrowser: true,
     offlinePage: true, geolocation: false, camera: false, zoom: false, keepAwake: false,
-    fullscreen: false, sideMenu: false, admob: false, onesignal: false, cacheMode: 'default'
+    fullscreen: false, sideMenu: false, admob: false, onesignal: false, cacheMode: 'default', encrypt: true
   },
   sideMenu: { about: '', contactEmail: '', shareText: '', links: [] },
   admob: { appId: '', bannerId: '' },
@@ -59,7 +60,7 @@ const MAX_HTML_KB = 500;
 export default function Create() {
   const { appId } = useParams();
   const [qs] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAnon, loading: authLoading, ensureUser } = useAuth();
   const nav = useNavigate();
   const [cfg, setCfg] = useState(() => ({
     ...DEFAULT,
@@ -77,6 +78,33 @@ export default function Create() {
   const [progress, setProgress] = useState({ label: '', value: 0 });
   const [error, setError] = useState('');
   const genCanvas = useRef(null);
+
+  // Mode edit butuh akun
+  useEffect(() => {
+    if (appId && !authLoading && !user) nav(`/login?next=/create/${appId}`, { replace: true });
+  }, [appId, authLoading, user, nav]);
+
+  // Prefill dari template (?template=id) atau AI Studio (?from=ai)
+  useEffect(() => {
+    if (appId) return;
+    const tid = qs.get('template');
+    let pre = null;
+    if (tid) pre = TEMPLATES.find((t) => t.id === tid);
+    if (qs.get('from') === 'ai') {
+      try { pre = JSON.parse(sessionStorage.getItem('apkify:ai') || 'null'); } catch { /* */ }
+    }
+    if (!pre) return;
+    setCfg((c) => ({
+      ...c,
+      name: c.name || (pre.appName || pre.name || '').slice(0, 30),
+      source: { type: pre.source || (pre.html ? 'html' : 'url'), url: c.source.url },
+      colors: pre.color ? { ...c.colors, primary: pre.color, statusBar: pre.color } : c.colors,
+      orientation: pre.preset?.orientation || c.orientation,
+      features: { ...c.features, ...(pre.preset?.features || {}) }
+    }));
+    if (pre.html) setHtml(pre.html);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Mode edit: muat konfigurasi app yang sudah ada (1x baca RTDB)
   useEffect(() => {
@@ -156,6 +184,7 @@ export default function Create() {
     if (Object.keys(errors).length) { setError(Object.values(errors)[0]); return; }
     setBusy(true);
     try {
+      const u = await ensureUser(); // tanpa login -> sesi tamu otomatis
       const iconFileId = await prepareIcon();
       const source = { type: cfg.source.type };
       if (source.type === 'url') source.url = normalizeUrl(cfg.source.url);
@@ -175,7 +204,7 @@ export default function Create() {
       setProgress({ label: 'Mengirim ke antrean build…', value: 100 });
       const body = { appId: appId || null, config: { ...cfg, source, iconFileId } };
       const res = await api.post('/api/builds', body);
-      clearCache(`apps:${user.uid}`);
+      clearCache(`apps:${u.uid}`);
       nav(`/build/${res.buildId}`);
     } catch (e) {
       setError(e.message);
@@ -190,6 +219,11 @@ export default function Create() {
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>{appId ? 'Perbarui aplikasi' : 'Buat aplikasi Android'}</Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>Isi data di bawah, lalu klik Build. Hasilnya APK (untuk dipasang langsung) dan AAB (untuk Google Play).</Typography>
+      {(!user || isAnon) && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Anda bisa build tanpa akun (mode tamu, batas build lebih kecil). <b>Daftar gratis</b> agar aplikasi, riwayat, dan keystore tersimpan permanen serta mendapat email saat build selesai.
+        </Alert>
+      )}
 
       {/* 1. SUMBER */}
       <Card sx={{ mb: 2 }}>
@@ -210,6 +244,10 @@ export default function Create() {
                 hint={`ZIP berisi index.html di root (mis. folder dist dari React/Vite). Maks ${MAX_ZIP_MB} MB.`} />
               {cfg.source.fileId && !zipFile && <Alert severity="info" sx={{ mt: 1 }}>ZIP sebelumnya akan dipakai lagi bila tidak memilih file baru.</Alert>}
             </>
+          )}
+          {cfg.source.type !== 'url' && (
+            <FormControlLabel sx={{ mt: 1 }} control={<Switch checked={!!f.encrypt} onChange={(e) => set('features.encrypt', e.target.checked)} />}
+              label="Enkripsi konten di dalam APK (AES-GCM) — mempersulit penyalinan kode" />
           )}
           {cfg.source.type === 'html' && (
             <TextField multiline minRows={8} maxRows={20} label="Kode HTML" value={html} onChange={(e) => setHtml(e.target.value)}

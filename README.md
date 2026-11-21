@@ -24,10 +24,16 @@ Platform gratis untuk mengubah **website, ZIP (hasil build React/Vite/Vue), atau
 | APK + AAB dari satu build | ✅ |
 | Kunci sama per package name agar update mulus | ✅ keystore per package, AES-256-GCM, bisa diunduh pemilik |
 | Gratis, tanpa watermark | ✅ (batas build harian per akun untuk anti-abuse, diatur admin) |
-| Free tools Play Store | ✅ Icon Resizer, Feature Graphic, QR Code, Color Palette |
+| Free tools Play Store (9) | ✅ Icon Resizer, Feature Graphic, Screenshot Mockups, Promo Video & GIF, Color Palette, Listing Preview, Description Templates, Play Listing Checklist, QR Code |
 | Docs / Publishing guide / FAQ / Pricing | ✅ dengan pencarian |
-| Tanpa login | ⚠️ **Diubah: wajib login** — menjaga kuota gratis GitHub/drive/email & memungkinkan dashboard, riwayat, keystore. |
-| Marketplace, AI Studio, app Android “AppMint” | ❌ belum (bisa tahap berikutnya) |
+| Templates, Compare, Features, About, Contact, News | ✅ (News dikelola dari Admin; Contact → email admin + inbox Admin) |
+| Panduan per platform | ✅ WordPress, Shopify, Wix, Webflow, Lovable, Bolt, v0, Replit, Blogger, Google Sites, React/Vite, HTML |
+| Enkripsi halaman bundel | ✅ AES-256-GCM per build, didekripsi saat dimuat di WebView |
+| AI Studio (kredit “Mints”) | ✅ Workers AI, kredit harian per akun + batas global |
+| Buy & Sell Apps | ✅ Marketplace dengan moderasi admin; transaksi langsung antar pengguna |
+| Studio cloud | ✅ Dashboard “Studio — Aplikasi Saya” |
+| Aplikasi Android pendamping | ✅ Halaman /get-app (PWA install + link APK/Play dari build Apkify sendiri) |
+| Tanpa login | ✅ Mode tamu (Firebase Anonymous Auth) dengan batas per sesi & per IP; bisa ditautkan ke akun tanpa kehilangan aplikasi |
 
 Tambahan dibanding referensi: dashboard “Aplikasi Saya”, riwayat build, update versi (versionCode otomatis naik), status build realtime + QR unduh, notifikasi email, halaman offline, panel admin untuk kuota 10 email & 10 drive.
 
@@ -114,6 +120,13 @@ Penyedia yang secret-nya belum diisi otomatis dilewati — Anda bisa mulai dari 
 4. **Realtime Database** → buat (mis. region `asia-southeast1`) → tab *Rules* → tempel `database.rules.json`.
 5. **Project settings → Service accounts → Generate new private key** → simpan JSON (dipakai Worker).
 6. Jadikan diri Anda admin: di RTDB tambahkan `admins/<UID-anda>: true`.
+
+### A2. Fitur rilis 2
+- **Mode tamu:** Firebase Authentication → Sign-in method → aktifkan **Anonymous**.
+- **AI Studio:** binding `[ai]` sudah ada di `wrangler.toml` (Workers AI, jatah gratis harian dalam *neurons*). Model diatur lewat `AI_MODEL`; batas kredit di Admin → Pengaturan.
+- **Formulir kontak:** isi `ADMIN_EMAIL` di `wrangler.toml` (pesan juga tersimpan di Admin → Pesan kontak).
+- **Aplikasi pendamping:** build situs Apkify Anda sendiri lewat Apkify (sumber Website), lalu isi `VITE_COMPANION_APK_URL` (link unduh APK dari halaman build) atau `VITE_COMPANION_PLAY_URL`.
+- **Rules RTDB:** tempel ulang `database.rules.json` (ada indeks baru untuk posts, market, messages).
 
 ### B. GitHub builder
 1. Repo ini (**publik**) sudah berisi workflow `.github/workflows/build-apk.yml` yang memakai `builder/scripts` & `builder/android-template` — tidak perlu repo terpisah.

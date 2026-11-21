@@ -7,7 +7,7 @@ import { useAuth, authError } from '../context/AuthContext';
 
 export default function Login({ mode: initialMode = 'login' }) {
   const [mode, setMode] = useState(initialMode); // login | register | reset
-  const { user, loginEmail, register, loginGoogle, loginGithub, resetPassword } = useAuth();
+  const { user, isAnon, loginEmail, register, loginGoogle, loginGithub, resetPassword } = useAuth();
   const [qs] = useSearchParams();
   const nav = useNavigate();
   const next = qs.get('next') || '/dashboard';
@@ -16,7 +16,7 @@ export default function Login({ mode: initialMode = 'login' }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { setMode(initialMode); }, [initialMode]);
-  useEffect(() => { if (user) nav(next, { replace: true }); }, [user, next, nav]);
+  useEffect(() => { if (user && !user.isAnonymous) nav(next, { replace: true }); }, [user, next, nav]);
 
   const run = async (fn) => {
     setBusy(true);
@@ -42,6 +42,7 @@ export default function Login({ mode: initialMode = 'login' }) {
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h5" gutterBottom>{titles[mode]}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>Akun dipakai untuk menyimpan aplikasi, riwayat build, dan kunci tanda tangan Anda.</Typography>
+          {isAnon && <Alert severity="info" sx={{ mb: 2 }}>Anda sedang memakai mode tamu. Daftar dengan Google, GitHub, atau email agar aplikasi yang sudah dibuat tersimpan permanen di akun Anda.</Alert>}
           {mode !== 'reset' && (
             <Stack spacing={1.5} sx={{ mb: 2 }}>
               <Button variant="outlined" startIcon={<GoogleIcon />} disabled={busy} onClick={() => run(loginGoogle)}>Lanjut dengan Google</Button>

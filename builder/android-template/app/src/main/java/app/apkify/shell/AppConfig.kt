@@ -9,6 +9,7 @@ class AppConfig(json: JSONObject) {
     val startUrl: String = json.optString("startUrl")
     val local: Boolean = json.optBoolean("local")
     val userAgentSuffix: String = json.optString("userAgentSuffix")
+    val encrypted: Boolean = json.optBoolean("encrypted")
 
     private val colors = json.optJSONObject("colors") ?: JSONObject()
     val primary: String = colors.optString("primary", "#4f46e5")

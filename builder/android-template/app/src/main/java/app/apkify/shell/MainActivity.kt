@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var drawer: DrawerLayout
     private lateinit var assetLoader: WebViewAssetLoader
+    private val encrypted by lazy { EncryptedAssets(this) }
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
@@ -230,8 +231,13 @@ class MainActivity : AppCompatActivity() {
         web.addJavascriptInterface(Bridge(this), "ApkifyBridge")
 
         web.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                assetLoader.shouldInterceptRequest(request.url)
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val u = request.url
+                if (cfg.encrypted && u.host == "appassets.androidplatform.net" && (u.path ?: "").startsWith("/assets/www/")) {
+                    return encrypted.serve(Uri.decode(u.encodedPath!!.removePrefix("/assets/www/")))
+                }
+                return assetLoader.shouldInterceptRequest(u)
+            }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 handleUrl(request.url, request.isForMainFrame)

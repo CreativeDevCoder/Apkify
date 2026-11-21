@@ -53,6 +53,13 @@ export async function readJson(req, max = 1024 * 1024) {
   }
 }
 
+/** Kunci IP ter-hash (tidak menyimpan IP mentah) */
+export async function ipKey(req, env) {
+  const ip = req.headers.get('cf-connecting-ip') || 'unknown';
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${ip}|${env.BUILDER_SECRET || ''}`));
+  return [...new Uint8Array(h).slice(0, 10)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function escapeHtml(s = '') {

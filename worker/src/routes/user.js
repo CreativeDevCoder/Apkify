@@ -5,7 +5,7 @@ import { sanitizeConfig } from '../config.js';
 import { decryptStr } from '../crypto.js';
 import { dispatchBuild } from '../github.js';
 import { getSettings } from './admin.js';
-import { json, HttpError, randomId, pkgKey, dayKey, readJson, b64 } from '../util.js';
+import { json, HttpError, randomId, pkgKey, dayKey, readJson, b64, ipKey } from '../util.js';
 
 const ICON_MAX = 2 * 1024 * 1024;
 
@@ -29,6 +29,17 @@ export async function upload(req, env) {
     const r = await putFile(env, buf, { owner: user.uid, kind: 'icon', name: 'icon.png', mime: 'image/png', public: true });
     return json({ fileId: r.fileId });
   }
+  if (kind === 'image') {
+    // gambar publik: screenshot marketplace, cover artikel
+    if (user.anonymous) throw new HttpError(403, 'Silakan daftar untuk mengunggah gambar.');
+    if (buf.byteLength > ICON_MAX) throw new HttpError(413, 'Gambar maksimal 2 MB');
+    const mime = head[0] === 0x89 && head[1] === 0x50 ? 'image/png'
+      : head[0] === 0xff && head[1] === 0xd8 ? 'image/jpeg'
+        : head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 ? 'image/webp' : null;
+    if (!mime) throw new HttpError(400, 'Gambar harus PNG, JPG, atau WebP');
+    const r = await putFile(env, buf, { owner: user.uid, kind: 'image', name: `image.${mime.split('/')[1]}`, mime, public: true });
+    return json({ fileId: r.fileId });
+  }
   if (kind === 'zip') {
     if (!(head[0] === 0x50 && head[1] === 0x4b)) throw new HttpError(400, 'File bukan ZIP yang valid');
     const r = await putFile(env, buf, { owner: user.uid, kind: 'source', name: 'source.zip', mime: 'application/zip', public: false });
@@ -46,11 +57,21 @@ export async function createBuild(req, env, ctx) {
   const cfg = sanitizeConfig(body.config);
   const db = rtdb(env);
 
-  // Batas build harian per user
+  // Batas build harian per user (tamu lebih kecil + batas per IP)
   const today = dayKey();
-  const limit = Number(settings.dailyBuildLimit || env.DEFAULT_DAILY_BUILD_LIMIT || 10);
-  const used = (await db.get(`quota/${user.uid}/${today}`)) || 0;
-  if (used >= limit) throw new HttpError(429, `Batas ${limit} build per hari tercapai. Coba lagi besok.`);
+  const limit = Number(user.anonymous ? settings.anonDailyLimit : settings.dailyBuildLimit);
+  const used = (await db.get(`quota/${today}/${user.uid}`)) || 0;
+  if (used >= limit) {
+    throw new HttpError(429, user.anonymous
+      ? `Batas ${limit} build tamu per hari tercapai. Daftar gratis untuk batas lebih besar.`
+      : `Batas ${limit} build per hari tercapai. Coba lagi besok.`);
+  }
+  let ipk = null;
+  if (user.anonymous) {
+    ipk = await ipKey(req, env);
+    const ipUsed = (await db.get(`quotaIp/${today}/${ipk}`)) || 0;
+    if (ipUsed >= Number(settings.anonIpDailyLimit)) throw new HttpError(429, 'Batas build tamu dari jaringan ini tercapai. Daftar gratis untuk melanjutkan.');
+  }
 
   // Kepemilikan app & package name
   const pk = pkgKey(cfg.packageName);
@@ -102,7 +123,8 @@ export async function createBuild(req, env, ctx) {
     [`buildConfigs/${buildId}`]: { uid: user.uid, appId, versionCode, email: user.email || '', config: cfg },
     [`userBuilds/${user.uid}/${buildId}`]: { appId, name: cfg.name, versionName: cfg.versionName, status: 'queued', createdAt: now },
     [`packages/${pk}`]: user.uid,
-    [`quota/${user.uid}/${today}`]: db.inc(1),
+    [`quota/${today}/${user.uid}`]: db.inc(1),
+    ...(ipk ? { [`quotaIp/${today}/${ipk}`]: db.inc(1) } : {}),
     'stats/public/totalBuilds': db.inc(1)
   });
 
@@ -112,7 +134,7 @@ export async function createBuild(req, env, ctx) {
     await db.update('', {
       [`builds/${buildId}/status`]: 'failed', [`builds/${buildId}/error`]: 'Gagal memulai build di cloud. Coba lagi beberapa saat.',
       [`builds/${buildId}/updatedAt`]: Date.now(), [`apps/${user.uid}/${appId}/lastStatus`]: 'failed',
-      [`userBuilds/${user.uid}/${buildId}/status`]: 'failed', [`quota/${user.uid}/${today}`]: db.inc(-1)
+      [`userBuilds/${user.uid}/${buildId}/status`]: 'failed', [`quota/${today}/${user.uid}`]: db.inc(-1)
     });
     console.error('dispatch', e);
     throw new HttpError(502, 'Gagal memulai build. Coba lagi beberapa saat.');

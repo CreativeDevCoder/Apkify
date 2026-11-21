@@ -19,6 +19,12 @@ EMAIL_FROM = "noreply@domainanda.com"
 EMAIL_FROM_NAME = "Apkify"
 DEFAULT_DAILY_BUILD_LIMIT = "10"
 MAX_UPLOAD_MB = "50"
+ADMIN_EMAIL = ""                                  # tujuan pesan formulir Kontak
+AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"           # model Workers AI untuk AI Studio
+
+# Workers AI untuk AI Studio (jatah gratis harian)
+[ai]
+binding = "AI"
 
 # Penyedia #1 penyimpanan: Cloudflare R2 (binding, tanpa egress fee)
 [[r2_buckets]]

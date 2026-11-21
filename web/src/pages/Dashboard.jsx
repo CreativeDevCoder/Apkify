@@ -19,7 +19,7 @@ import StatusChip from '../components/StatusChip';
 const toList = (obj) => Object.entries(obj || {}).map(([id, v]) => ({ id, ...v }));
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAnon } = useAuth();
   const [apps, setApps] = useState(null);
   const [builds, setBuilds] = useState(null);
   const [err, setErr] = useState('');
@@ -65,11 +65,16 @@ export default function Dashboard() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack direction="row" alignItems="center" sx={{ mb: 3 }} spacing={1}>
-        <Typography variant="h4" sx={{ flex: 1 }}>Aplikasi Saya</Typography>
+        <Typography variant="h4" sx={{ flex: 1 }}>Studio — Aplikasi Saya</Typography>
         <Tooltip title="Muat ulang"><IconButton onClick={() => load(true)}><RefreshIcon /></IconButton></Tooltip>
         <Button variant="contained" startIcon={<AddIcon />} component={RouterLink} to="/create">Buat baru</Button>
       </Stack>
       {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {isAnon && (
+        <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" component={RouterLink} to="/register?next=/dashboard">Daftar</Button>}>
+          Mode tamu: aplikasi hanya tersimpan di browser ini dan hilang bila sesi dihapus. Daftar gratis untuk menyimpannya permanen.
+        </Alert>
+      )}
 
       {apps === null ? (
         <Grid container spacing={2}>{[1, 2, 3].map((i) => <Grid item xs={12} sm={6} md={4} key={i}><Skeleton variant="rounded" height={170} /></Grid>)}</Grid>

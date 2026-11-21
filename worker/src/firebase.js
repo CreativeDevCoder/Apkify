@@ -14,7 +14,10 @@ export async function verifyIdToken(env, token) {
       audience: env.FIREBASE_PROJECT_ID
     });
     if (!payload.sub) throw new Error('no sub');
-    return { uid: payload.sub, email: payload.email || '', emailVerified: !!payload.email_verified, name: payload.name || '' };
+    return {
+      uid: payload.sub, email: payload.email || '', emailVerified: !!payload.email_verified, name: payload.name || '',
+      anonymous: payload.firebase?.sign_in_provider === 'anonymous'
+    };
   } catch {
     throw new HttpError(401, 'Sesi tidak valid, silakan masuk ulang.');
   }

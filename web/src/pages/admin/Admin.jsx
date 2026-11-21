@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { PostsAdmin, MarketAdmin, MessagesAdmin } from './ContentAdmin';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Container, Typography, Tabs, Tab, Card, Table, TableHead, TableRow, TableCell, TableBody, Switch,
@@ -79,7 +80,8 @@ export default function Admin() {
   const [tab, setTab] = useState('email');
   const [data, setData] = useState(null);
   const [builds, setBuilds] = useState([]);
-  const [settings, setSettings] = useState({ dailyBuildLimit: 10, maintenance: false });
+  const [settings, setSettings] = useState({ dailyBuildLimit: 10, anonDailyLimit: 2, anonIpDailyLimit: 5, aiDailyLimit: 5, aiGlobalDailyLimit: 60, marketAutoApprove: false, maintenance: false });
+  const notify = useCallback((type, text) => setMsg({ type, text }), []);
   const [testTo, setTestTo] = useState('');
   const [msg, setMsg] = useState(null);
 
@@ -106,6 +108,9 @@ export default function Admin() {
         <Tab value="email" label="10 Penyedia Email" />
         <Tab value="storage" label="10 Penyedia Drive" />
         <Tab value="builds" label="Build terbaru" />
+        <Tab value="market" label="Moderasi marketplace" />
+        <Tab value="posts" label="Berita" />
+        <Tab value="messages" label="Pesan kontak" />
         <Tab value="settings" label="Pengaturan" />
       </Tabs>
       {!data && <LinearProgress />}
@@ -155,10 +160,25 @@ export default function Admin() {
         </Card>
       )}
 
+      {tab === 'market' && <MarketAdmin notify={notify} />}
+      {tab === 'posts' && <PostsAdmin notify={notify} />}
+      {tab === 'messages' && <MessagesAdmin notify={notify} />}
+
       {tab === 'settings' && (
         <Card><CardContent>
           <Stack spacing={2} sx={{ maxWidth: 360 }}>
-            <TextField type="number" label="Batas build per user per hari" value={settings.dailyBuildLimit} onChange={(e) => setSettings({ ...settings, dailyBuildLimit: Number(e.target.value) })} />
+            {[
+              ['dailyBuildLimit', 'Batas build per akun per hari'],
+              ['anonDailyLimit', 'Batas build tamu (tanpa login) per hari'],
+              ['anonIpDailyLimit', 'Batas build tamu per IP per hari'],
+              ['aiDailyLimit', 'Kredit AI Studio per akun per hari'],
+              ['aiGlobalDailyLimit', 'Total generate AI per hari (semua user)']
+            ].map(([k, label]) => (
+              <TextField key={k} type="number" label={label} value={settings[k] ?? ''} onChange={(e) => setSettings({ ...settings, [k]: Number(e.target.value) })} />
+            ))}
+            <Box>
+              <Switch checked={!!settings.marketAutoApprove} onChange={(e) => setSettings({ ...settings, marketAutoApprove: e.target.checked })} /> Listing marketplace langsung tayang (tanpa moderasi)
+            </Box>
             <Box>
               <Switch checked={!!settings.maintenance} onChange={(e) => setSettings({ ...settings, maintenance: e.target.checked })} /> Mode perawatan (tolak build baru)
             </Box>

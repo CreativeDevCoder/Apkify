@@ -4,6 +4,10 @@ import { upload, createBuild, downloadKeystore, deleteApp } from './routes/user.
 import { serveFile } from './routes/files.js';
 import { getConfig, getFile, saveKeystore, uploadArtifact, finish } from './routes/internal.js';
 import { handleAdmin } from './routes/admin.js';
+import { aiGenerate, aiQuota } from './routes/ai.js';
+import {
+  listPosts, getPost, adminPosts, listMarket, getListing, myListings, saveListing, markSold, deleteListing, adminMarket, contact, adminMessages
+} from './routes/content.js';
 
 async function publicStats(req, env, ctx) {
   // Edge cache 5 menit: ribuan pengunjung beranda = 1 baca RTDB per data center
@@ -27,6 +31,23 @@ async function route(req, env, ctx) {
   if (p === '/api/public/stats' && m === 'GET') return publicStats(req, env, ctx);
   if ((r = p.match(/^\/api\/files\/([A-Za-z0-9]+)(?:\/([^/]+))?$/)) && m === 'GET') return serveFile(req, env, ctx, r[1], r[2] && decodeURIComponent(r[2]));
 
+  if (p === '/api/public/posts' && m === 'GET') return listPosts(req, env, ctx);
+  if ((r = p.match(/^\/api\/public\/posts\/([a-z0-9-]+)$/)) && m === 'GET') return getPost(req, env, ctx, r[1]);
+  if (p === '/api/public/market' && m === 'GET') return listMarket(req, env, ctx);
+  if ((r = p.match(/^\/api\/public\/market\/([A-Za-z0-9]+)$/)) && m === 'GET') return getListing(req, env, r[1]);
+  if (p === '/api/public/contact' && m === 'POST') return contact(req, env, ctx);
+
+  if (p === '/api/ai/quota' && m === 'GET') return aiQuota(req, env);
+  if (p === '/api/ai/generate' && m === 'POST') return aiGenerate(req, env);
+
+  if (p === '/api/market/mine' && m === 'GET') return myListings(req, env);
+  if (p === '/api/market' && m === 'POST') return saveListing(req, env, null);
+  if ((r = p.match(/^\/api\/market\/([A-Za-z0-9]+)$/))) {
+    if (m === 'PUT') return saveListing(req, env, r[1]);
+    if (m === 'DELETE') return deleteListing(req, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/market\/([A-Za-z0-9]+)\/sold$/)) && m === 'POST') return markSold(req, env, r[1]);
+
   if (p === '/api/uploads' && m === 'POST') return upload(req, env);
   if (p === '/api/builds' && m === 'POST') return createBuild(req, env, ctx);
   if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/keystore$/)) && m === 'GET') return downloadKeystore(req, env, r[1]);
@@ -39,6 +60,9 @@ async function route(req, env, ctx) {
   if ((r = p.match(/^\/api\/internal\/files\/([A-Za-z0-9]+)$/)) && m === 'GET') return getFile(req, env, r[1]);
   if (p === '/api/internal/keystores' && m === 'POST') return saveKeystore(req, env);
 
+  if (p.startsWith('/api/admin/posts')) return adminPosts(req, env, p);
+  if (p.startsWith('/api/admin/market')) return adminMarket(req, env, p);
+  if (p.startsWith('/api/admin/messages')) return adminMessages(req, env, p);
   if (p.startsWith('/api/admin/')) return handleAdmin(req, env, p);
   throw new HttpError(404, 'Endpoint tidak ditemukan');
 }
@@ -62,6 +86,19 @@ async function sweepStuck(env) {
   }
 }
 
+// Hapus penghitung kuota harian yang sudah lewat (hemat ukuran RTDB)
+async function pruneQuotas(env) {
+  // kunci kuota berstruktur {root}/{yyyymmdd}/{id} -> cukup 1 baca shallow + 1 patch per root
+  const db = rtdb(env);
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  for (const root of ['quotaIp', 'contactQuota', 'aiQuota', 'quota']) {
+    const days = (await db.get(root, { shallow: 'true' })) || {};
+    const patch = {};
+    for (const d of Object.keys(days)) if (d < today) patch[`${root}/${d}`] = null;
+    if (Object.keys(patch).length) await db.update('', patch);
+  }
+}
+
 export default {
   async fetch(req, env, ctx) {
     const cors = corsHeaders(env, req);
@@ -80,5 +117,7 @@ export default {
   },
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(sweepStuck(env));
+    // sekali sehari (run pertama setelah 00:00 UTC)
+    if (new Date().getUTCHours() === 0 && new Date().getUTCMinutes() < 30) ctx.waitUntil(pruneQuotas(env));
   }
 };

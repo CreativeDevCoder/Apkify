@@ -2,7 +2,6 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
@@ -10,31 +9,58 @@
       }
     },
     "admins": {
-      "$uid": { ".read": "auth != null && auth.uid === $uid" }
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
     },
     "apps": {
-      "$uid": { ".read": "auth != null && auth.uid === $uid" }
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
     },
     "userBuilds": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".indexOn": ["createdAt", "appId"]
+        ".indexOn": [
+          "createdAt",
+          "appId"
+        ]
       }
     },
     "builds": {
-      ".indexOn": ["createdAt", "status"],
+      ".indexOn": [
+        "createdAt",
+        "status"
+      ],
       "$buildId": {
         ".read": "auth != null && (data.child('uid').val() === auth.uid || root.child('admins').child(auth.uid).val() === true)"
       }
     },
     "stats": {
-      "public": { ".read": true }
+      "public": {
+        ".read": true
+      }
     },
     "config": {
       ".read": "auth != null && root.child('admins').child(auth.uid).val() === true"
     },
     "providerUsage": {
       ".read": "auth != null && root.child('admins').child(auth.uid).val() === true"
+    },
+    "posts": {
+      ".indexOn": [
+        "status"
+      ]
+    },
+    "market": {
+      ".indexOn": [
+        "status"
+      ]
+    },
+    "messages": {
+      ".indexOn": [
+        "createdAt"
+      ]
     }
   }
 }

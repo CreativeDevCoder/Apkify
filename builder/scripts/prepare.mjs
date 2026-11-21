@@ -43,7 +43,8 @@ async function main() {
     sideMenu: c.sideMenu,
     admob: c.admob,
     onesignal: c.onesignal,
-    userAgentSuffix: c.userAgentSuffix || ''
+    userAgentSuffix: c.userAgentSuffix || '',
+    encrypted: c.source.type !== 'url' && c.features.encrypt !== false
   };
   fs.writeFileSync(path.join(ASSETS, 'apkify.json'), JSON.stringify(runtime, null, 2));
 
@@ -120,10 +121,14 @@ async function main() {
     }
   }
 
+  // ---- Enkripsi konten lokal (AES-256-GCM, kunci acak per build di dalam kode ter-obfuscate) ----
+  if (runtime.encrypted) encryptAssets();
+
   // ---- Keystore (sama untuk setiap build package yang sama) ----
   const ksFile = path.join(TMP, 'upload.jks');
   let ks = keystore;
   if (!ks) {
+    fs.rmSync(ksFile, { force: true });
     const pass = crypto.randomBytes(24).toString('base64url');
     mask(pass);
     const cn = c.name.replace(/[,=+<>#;"\\]/g, ' ').trim() || 'App';
@@ -148,6 +153,38 @@ async function main() {
   setEnv('KS_KEY_PASS', ks.keyPass);
   setEnv('KS_ALIAS', ks.alias);
   console.log('Proyek siap di', WORK);
+}
+
+function encryptAssets() {
+  const www = path.join(ASSETS, 'www');
+  const out = path.join(ASSETS, 'www_enc');
+  const key = crypto.randomBytes(32);
+  let n = 0;
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      const rel = path.relative(www, p);
+      const iv = crypto.randomBytes(12);
+      const ci = crypto.createCipheriv('aes-256-gcm', key, iv);
+      const ct = Buffer.concat([ci.update(fs.readFileSync(p)), ci.final()]);
+      const dest = path.join(out, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      // format: iv(12) | ciphertext | tag(16)  — cocok dengan Cipher "AES/GCM/NoPadding" di Android
+      fs.writeFileSync(dest, Buffer.concat([iv, ct, ci.getAuthTag()]));
+      n++;
+    }
+  };
+  walk(www);
+  fs.rmSync(www, { recursive: true, force: true });
+  // Kunci dipecah jadi dua array XOR agar tidak muncul utuh sebagai string di APK
+  const mask = crypto.randomBytes(32);
+  const sb = (v) => (v > 127 ? v - 256 : v); // representasi Byte bertanda Kotlin
+  const a = [...key].map((v, i) => sb(v ^ mask[i]));
+  const b = [...mask].map(sb);
+  fs.writeFileSync(path.join(WORK, 'app/src/main/java/app/apkify/shell/K.kt'),
+    `package app.apkify.shell\n\ninternal object K {\n    private val a = byteArrayOf(${a.join(', ')})\n    private val b = byteArrayOf(${b.join(', ')})\n    fun k(): ByteArray = ByteArray(a.size) { i -> (a[i].toInt() xor b[i].toInt()).toByte() }\n}\n`);
+  console.log(`Enkripsi ${n} file konten.`);
 }
 
 main().catch(async (e) => {

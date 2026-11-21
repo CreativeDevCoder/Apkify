@@ -14,7 +14,16 @@ export async function requireAdmin(req, env) {
 }
 
 export async function getSettings(env) {
-  return memo('settings', 60_000, async () => ({ dailyBuildLimit: Number(env.DEFAULT_DAILY_BUILD_LIMIT || 10), maintenance: false, ...((await rtdb(env).get('config/settings')) || {}) }));
+  return memo('settings', 60_000, async () => ({
+    dailyBuildLimit: Number(env.DEFAULT_DAILY_BUILD_LIMIT || 10),
+    anonDailyLimit: 2, // build per tamu per hari
+    anonIpDailyLimit: 5, // build tamu per IP per hari (anti-abuse)
+    aiDailyLimit: 5, // generate AI Studio per user per hari
+    aiGlobalDailyLimit: 60, // total generate AI per hari (jaga kuota gratis Workers AI)
+    marketAutoApprove: false,
+    maintenance: false,
+    ...((await rtdb(env).get('config/settings')) || {})
+  }));
 }
 
 export async function handleAdmin(req, env, path) {
@@ -65,7 +74,11 @@ export async function handleAdmin(req, env, path) {
     if (m === 'GET') return json(await getSettings(env));
     if (m === 'PUT') {
       const b = await readJson(req);
-      const s = { dailyBuildLimit: Math.max(0, Math.round(Number(b.dailyBuildLimit) || 0)), maintenance: !!b.maintenance };
+      const n = (v, d) => Math.max(0, Math.round(Number.isFinite(Number(v)) ? Number(v) : d));
+      const s = {
+        dailyBuildLimit: n(b.dailyBuildLimit, 10), anonDailyLimit: n(b.anonDailyLimit, 2), anonIpDailyLimit: n(b.anonIpDailyLimit, 5),
+        aiDailyLimit: n(b.aiDailyLimit, 5), aiGlobalDailyLimit: n(b.aiGlobalDailyLimit, 60), marketAutoApprove: !!b.marketAutoApprove, maintenance: !!b.maintenance
+      };
       await db.set('config/settings', s);
       forget('settings');
       return json(s);
