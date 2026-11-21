@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Roboto,sans-serif;background:#f7f7fb;color:#222;text-align:center}
+  .box{padding:32px;max-width:320px}
+  .ico{font-size:56px}
+  h1{font-size:20px;margin:12px 0 8px}
+  p{color:#666;line-height:1.5;margin:0 0 20px}
+  button{background:var(--c,#4f46e5);color:#fff;border:0;border-radius:10px;padding:12px 24px;font-size:16px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="ico">📡</div>
+  <h1>Tidak ada koneksi</h1>
+  <p>Periksa internet Anda, lalu coba lagi.</p>
+  <button onclick="ApkifyBridge.retry()">Coba lagi</button>
+</div>
+<script>
+  try { document.body.style.setProperty('--c', ApkifyBridge.primaryColor()); } catch (e) {}
+</script>
+</body>
+</html>

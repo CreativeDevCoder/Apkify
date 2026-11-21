@@ -1,0 +1,72 @@
+# Monorepo: script di builder/scripts, template di builder/android-template.
+# Builder APK/AAB gratis di GitHub Actions (pengganti VPS).
+# Dipicu oleh Worker lewat workflow_dispatch dengan input build_id saja.
+# Secrets repo yang dibutuhkan: API_BASE (mis. https://apkify.domainanda.com), BUILDER_SECRET
+name: build-apk
+run-name: build ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Build ID
+        required: true
+        type: string
+
+concurrency:
+  group: build-${{ inputs.build_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      BUILDER_SECRET: ${{ secrets.BUILDER_SECRET }}
+      BUILD_ID: ${{ inputs.build_id }}
+      LOG_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      WORK_DIR: ${{ github.workspace }}/work
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Cache dependency Gradle/AGP lintas build -> build ke-2 dst jauh lebih cepat
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+          cache-read-only: false
+
+      - name: Install script deps
+        working-directory: builder/scripts
+        run: npm install --no-audit --no-fund
+
+      - name: Siapkan proyek Android
+        id: prepare
+        run: node builder/scripts/prepare.mjs
+
+      - name: Build APK & AAB
+        working-directory: work
+        run: gradle assembleRelease bundleRelease --no-daemon --stacktrace
+
+      - name: Unggah hasil
+        run: node builder/scripts/upload.mjs
+
+      - name: Laporkan kegagalan
+        if: failure()
+        run: node builder/scripts/fail.mjs "${{ steps.prepare.outcome == 'failure' && 'prepare' || 'building' }}"
+
+      - name: Bersihkan keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"

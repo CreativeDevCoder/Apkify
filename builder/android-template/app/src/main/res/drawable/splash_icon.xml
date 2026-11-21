@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash API: kanvas 288dp, area terlihat lingkaran 192dp -> logo 144dp di tengah -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_logo"
+    android:inset="72dp" />

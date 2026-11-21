@@ -1,0 +1,75 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Konfigurasi ditulis oleh scripts/prepare.mjs
+def cfg = new JsonSlurper().parse(file('src/main/assets/apkify.json'))
+def useAdmob = cfg.features?.admob == true
+def usePush = cfg.features?.onesignal == true
+
+android {
+    namespace 'app.apkify.shell'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId cfg.packageName
+        minSdk 23
+        targetSdk 36
+        versionCode cfg.versionCode as int
+        versionName cfg.versionName
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KS_FILE') ?: 'missing.jks')
+            storePassword System.getenv('KS_STORE_PASS')
+            keyAlias System.getenv('KS_ALIAS') ?: 'upload'
+            keyPassword System.getenv('KS_KEY_PASS')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    // Fitur opsional dipilih lewat source set: AdMob/OneSignal hanya ikut ter-bundle bila dipakai
+    sourceSets {
+        main {
+            java.srcDirs += [useAdmob ? 'src/admob/java' : 'src/noadmob/java']
+            java.srcDirs += [usePush ? 'src/onesignal/java' : 'src/nopush/java']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures { buildConfig false }
+    lint { checkReleaseBuilds false; abortOnError false }
+    bundle {
+        language { enableSplit = false }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity-ktx:1.9.3'
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation 'com.google.android.material:material:1.12.0'
+    if (useAdmob) implementation 'com.google.android.gms:play-services-ads:23.6.0'
+    if (usePush) {
+        implementation 'com.onesignal:OneSignal:[5.1.6, 5.1.99]'
+        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    }
+}

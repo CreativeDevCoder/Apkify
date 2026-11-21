@@ -1,0 +1,37 @@
+import { Link as RouterLink } from 'react-router-dom';
+import { Container, Typography, Grid, Card, CardActionArea, CardContent, Box } from '@mui/material';
+import PhotoSizeSelectLargeIcon from '@mui/icons-material/PhotoSizeSelectLarge';
+import QrCodeIcon from '@mui/icons-material/QrCode2';
+import PaletteIcon from '@mui/icons-material/Palette';
+import WallpaperIcon from '@mui/icons-material/Wallpaper';
+
+const TOOLS = [
+  { to: '/tools/icon-resizer', icon: <PhotoSizeSelectLargeIcon />, t: 'Icon Resizer', d: 'Satu gambar → semua ukuran ikon Android (mipmap) + ikon Play Store 512×512, diunduh sebagai ZIP.' },
+  { to: '/tools/feature-graphic', icon: <WallpaperIcon />, t: 'Feature Graphic Maker', d: 'Buat feature graphic 1024×500 untuk halaman Play Store.' },
+  { to: '/tools/qr-code', icon: <QrCodeIcon />, t: 'QR Code Generator', d: 'QR untuk link unduhan APK, website, atau teks apa pun.' },
+  { to: '/tools/color-palette', icon: <PaletteIcon />, t: 'Color Palette', d: 'Turunkan palet warna aplikasi (status bar, aksen, splash) dari satu warna utama.' }
+];
+
+export default function ToolsIndex() {
+  return (
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom>Tools Gratis</Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>Semua diproses di browser Anda — file tidak diunggah ke server.</Typography>
+      <Grid container spacing={2}>
+        {TOOLS.map((t) => (
+          <Grid item xs={12} sm={6} key={t.to}>
+            <Card sx={{ height: '100%' }}>
+              <CardActionArea component={RouterLink} to={t.to} sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ color: 'primary.main', mb: 1 }}>{t.icon}</Box>
+                  <Typography variant="h6">{t.t}</Typography>
+                  <Typography color="text.secondary">{t.d}</Typography>
+                </CardContent>
+              </CardActionArea>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Container>
+  );
+}
