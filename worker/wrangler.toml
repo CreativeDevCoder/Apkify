@@ -5,7 +5,10 @@ compatibility_flags = ["nodejs_compat"]
 
 # Pasang di domain yang sama dengan Pages agar tanpa CORS & Cache API aktif
 # (Cache API tidak berfungsi di *.workers.dev):
-# routes = [{ pattern = "apkify.domainanda.com/api/*", zone_name = "domainanda.com" }]
+# routes = [
+#   { pattern = "apkify.domainanda.com/api/*", zone_name = "domainanda.com" },
+#   { pattern = "*.apps.domainanda.com/*", zone_name = "domainanda.com" }   # hosting subdomain
+# ]
 
 [vars]
 APP_NAME = "Apkify"
@@ -21,6 +24,8 @@ DEFAULT_DAILY_BUILD_LIMIT = "10"
 MAX_UPLOAD_MB = "50"
 ADMIN_EMAIL = ""                                  # tujuan pesan formulir Kontak
 AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"           # model Workers AI untuk AI Studio
+HOSTING_DOMAIN = ""                               # mis. "apps.domainanda.com" -> situs di nama.apps.domainanda.com (butuh DNS wildcard + route)
+PUBLIC_API_BASE = ""                              # URL publik API untuk aplikasi Android (Remote Update), mis. https://apkify.domainanda.com
 
 # Workers AI untuk AI Studio (jatah gratis harian)
 [ai]

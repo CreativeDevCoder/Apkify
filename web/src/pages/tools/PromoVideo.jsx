@@ -91,6 +91,7 @@ export default function PromoVideo() {
     rec.stop();
     await done;
     const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+    if (ext === 'webm') alert('Browser ini belum bisa merekam MP4, jadi video disimpan sebagai WebM. Gunakan Chrome versi terbaru untuk MP4, atau konversi WebM ke MP4 sebelum diunggah ke media sosial.');
     downloadBlob(new Blob(chunks, { type: mime }), `promo.${ext}`);
     setBusy(''); setProg(0);
     setImgs((x) => [...x]); // mulai ulang pratinjau

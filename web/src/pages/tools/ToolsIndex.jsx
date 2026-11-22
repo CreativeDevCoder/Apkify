@@ -9,6 +9,8 @@ import MovieIcon from '@mui/icons-material/Movie';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ChecklistIcon from '@mui/icons-material/Checklist';
+import InstallMobileIcon from '@mui/icons-material/InstallMobile';
+import PermMediaIcon from '@mui/icons-material/PermMedia';
 
 const TOOLS = [
   { to: '/tools/icon-resizer', icon: <PhotoSizeSelectLargeIcon />, t: 'Icon Resizer', d: 'Satu gambar → semua ukuran ikon Android (mipmap) + ikon Play Store 512×512, diunduh sebagai ZIP.' },
@@ -19,7 +21,9 @@ const TOOLS = [
   { to: '/tools/listing-preview', icon: <StorefrontIcon />, t: 'Listing Preview', d: 'Pratinjau halaman Play Store dengan penghitung batas karakter.' },
   { to: '/tools/description-templates', icon: <DescriptionIcon />, t: 'Description Templates', d: 'Buat deskripsi singkat & lengkap siap tempel ke Play Console.' },
   { to: '/tools/play-checklist', icon: <ChecklistIcon />, t: 'Play Listing Checklist', d: 'Daftar periksa sebelum kirim ke peninjauan Google Play.' },
-  { to: '/tools/color-palette', icon: <PaletteIcon />, t: 'Color Palette', d: 'Turunkan palet warna aplikasi (status bar, aksen, splash) dari satu warna utama.' }
+  { to: '/tools/pwa-builder', icon: <InstallMobileIcon />, t: 'PWA Builder (eksperimental)', d: 'Buat manifest, service worker, ikon, dan halaman offline agar situs jadi PWA.' },
+  { to: '/media-app', icon: <PermMediaIcon />, t: 'Media App Maker', d: 'Foto, musik, video, atau PDF jadi aplikasi offline.' },
+  { to: '/tools/color-palette', icon: <PaletteIcon />, t: 'Color Palette', d: 'Ekstrak warna dari logo atau turunkan palet aplikasi (status bar, aksen, splash).' }
 ];
 
 export default function ToolsIndex() {

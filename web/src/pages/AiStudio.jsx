@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  Container, Typography, Card, CardContent, TextField, Button, Stack, Chip, Alert, Grid, Box, Tabs, Tab, LinearProgress
+  Container, Typography, Card, CardContent, TextField, Button, Stack, Chip, Alert, Grid, Box, Tabs, Tab, LinearProgress, FormControlLabel, Checkbox
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import DownloadIcon from '@mui/icons-material/Download';
+import PublicIcon from '@mui/icons-material/Public';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { downloadBlob } from '../lib/canvas';
@@ -31,6 +32,7 @@ export default function AiStudio() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [credits, setCredits] = useState(null);
+  const [supabase, setSupabase] = useState(false);
 
   const canUse = user && !isAnon;
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function AiStudio() {
     setErr('');
     setBusy(true);
     try {
-      const r = await api.post('/api/ai/generate', { prompt, html: refine ? html : undefined });
+      const r = await api.post('/api/ai/generate', { prompt, html: refine ? html : undefined, supabase });
       setHtml(r.html);
       if (r.title) setTitle(r.title);
       setCredits((c) => ({ ...(c || {}), remaining: r.remaining }));
@@ -86,6 +88,8 @@ export default function AiStudio() {
                   {EXAMPLES.map((e) => <Chip key={e} label={e.split(':')[0]} onClick={() => setPrompt(e)} variant="outlined" disabled={!canUse} />)}
                 </Stack>
               )}
+              <FormControlLabel disabled={!canUse} control={<Checkbox checked={supabase} onChange={(e) => setSupabase(e.target.checked)} />}
+                label="Pakai backend Supabase (login & database)" />
               {busy && <Box><LinearProgress /><Typography variant="caption" color="text.secondary">AI sedang menulis kode… biasanya 20–60 detik.</Typography></Box>}
               {err && <Alert severity="error">{err}</Alert>}
               <Stack direction="row" spacing={1}>
@@ -102,6 +106,10 @@ export default function AiStudio() {
             <Stack spacing={1} sx={{ mt: 2 }}>
               <TextField label="Nama aplikasi" value={title} onChange={(e) => setTitle(e.target.value.slice(0, 30))} />
               <Button size="large" variant="contained" color="secondary" startIcon={<RocketLaunchIcon />} onClick={toApp}>Jadikan aplikasi Android</Button>
+              <Button variant="outlined" startIcon={<PublicIcon />} onClick={() => {
+                sessionStorage.setItem('apkify:ai', JSON.stringify({ html, appName: title || 'Aplikasi AI', source: 'html' }));
+                nav(`/hosting?from=ai&name=${encodeURIComponent((title || 'aplikasi-ai').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32))}`);
+              }}>Terbitkan ke subdomain</Button>
               <Button startIcon={<DownloadIcon />} onClick={() => downloadBlob(new Blob([html], { type: 'text/html' }), 'index.html')}>Unduh HTML</Button>
             </Stack>
           )}

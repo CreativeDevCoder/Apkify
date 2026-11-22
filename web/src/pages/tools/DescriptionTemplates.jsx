@@ -1,6 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, TextField, Grid, MenuItem, Button, Snackbar } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { Alert } from '@mui/material';
+
+/** Pemeriksaan otomatis berdasarkan pedoman metadata Google Play (ringkas). */
+function policyCheck(name, short, full) {
+  const w = [];
+  const promo = /\b(terbaik|nomor\s*1|#1|no\.?\s*1|top\s*1|gratis|free|diskon|promo|sale|murah|terlaris|best|top)\b/i;
+  if (promo.test(name)) w.push(['error', 'Nama aplikasi memuat kata promosi/peringkat (mis. “terbaik”, “#1”, “gratis”, “diskon”) — dilarang di nama.']);
+  if (promo.test(short)) w.push(['warning', 'Deskripsi singkat memuat kata promosi/peringkat — hindari klaim performa atau harga.']);
+  if (/[A-Z]{6,}/.test(name) || (name.length > 4 && name === name.toUpperCase())) w.push(['warning', 'Nama memakai huruf kapital berlebihan.']);
+  const emoji = /\p{Extended_Pictographic}/u;
+  if (emoji.test(name)) w.push(['error', 'Nama aplikasi tidak boleh berisi emoji.']);
+  if (emoji.test(short)) w.push(['warning', 'Hindari emoji di deskripsi singkat.']);
+  if (/(https?:\/\/|www\.|@\w+\.\w+|\b0?8\d{8,11}\b|\+62)/i.test(short)) w.push(['warning', 'Deskripsi singkat memuat URL/kontak — letakkan di deskripsi lengkap.']);
+  if (/[!?]{2,}/.test(name + short)) w.push(['warning', 'Tanda baca berulang (!!, ??) dianggap spam.']);
+  const words = full.toLowerCase().match(/[a-z\u00c0-\u024f]{4,}/g) || [];
+  const freq = {};
+  words.forEach((x) => { freq[x] = (freq[x] || 0) + 1; });
+  const stuffed = Object.entries(freq).filter(([, n]) => words.length > 40 && n / words.length > 0.05).map(([x]) => x);
+  if (stuffed.length) w.push(['warning', `Kemungkinan keyword stuffing: “${stuffed.slice(0, 3).join('”, “')}” terlalu sering diulang.`]);
+  if (/(whatsapp|instagram|tiktok|facebook|google|shopee|tokopedia)/i.test(name)) w.push(['warning', 'Nama memuat merek pihak lain — pastikan Anda berhak memakainya.']);
+  if (name.length > 30) w.push(['error', 'Nama lebih dari 30 karakter.']);
+  if (short.length > 80) w.push(['error', 'Deskripsi singkat lebih dari 80 karakter.']);
+  if (full.length > 4000) w.push(['error', 'Deskripsi lengkap lebih dari 4000 karakter.']);
+  return w;
+}
 
 const TPL = {
   shop: {
@@ -71,7 +96,12 @@ export default function DescriptionTemplates() {
                 <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => copy(out.full)}>Salin</Button></Stack>
               <Typography sx={{ mt: 1, whiteSpace: 'pre-line' }}>{out.full}</Typography>
             </CardContent></Card>
-            <Typography variant="body2" color="text.secondary">Tips: hindari kata “terbaik”, “#1”, atau klaim harga/promo di nama & deskripsi singkat — Google Play melarangnya.</Typography>
+            <Card><CardContent>
+              <Typography fontWeight={700} gutterBottom>Cek kebijakan otomatis</Typography>
+              {(() => { const w = policyCheck(v.name, out.short, out.full); return w.length
+                ? <Stack spacing={1}>{w.map(([sev, m]) => <Alert key={m} severity={sev}>{m}</Alert>)}</Stack>
+                : <Alert severity="success">Tidak ditemukan masalah umum. Tetap tinjau Kebijakan Metadata Google Play sebelum publikasi.</Alert>; })()}
+            </CardContent></Card>
           </Stack>
         </Grid>
       </Grid>

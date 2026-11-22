@@ -5,6 +5,7 @@ import android.widget.FrameLayout
 
 /** Varian tanpa AdMob: tidak ada dependency iklan di APK. */
 object Ads {
-    fun init(activity: Activity, container: FrameLayout, bannerId: String) {}
+    fun init(activity: Activity, container: FrameLayout, cfg: AppConfig) {}
+    fun onNavigation(activity: Activity) {}
     fun destroy() {}
 }

@@ -95,6 +95,79 @@ export const GUIDES = [
     ]
   },
   {
+    id: 'google-ai-studio', name: 'Google AI Studio', source: 'zip',
+    intro: 'Aplikasi dari Google AI Studio (Build) berbasis React dan bisa dijadikan APK.',
+    steps: [
+      'Klik Deploy (Cloud Run) dan pakai URL-nya di tab Website, ATAU unduh kode (Download app).',
+      'Untuk ZIP: npm install, set base: "./" di vite.config, npm run build, zip ISI folder dist.',
+      'Kunci API Gemini jangan disimpan di kode klien — panggil lewat server/proxy Anda sendiri.'
+    ]
+  },
+  {
+    id: 'base44', name: 'Base44', source: 'url',
+    intro: 'Aplikasi Base44 dihosting otomatis — pakai URL publiknya.',
+    steps: [
+      'Publish aplikasi di Base44 dan pastikan akses publik (atau login di dalam aplikasi).',
+      'Salin URL aplikasi dan pilih tab Website.',
+      'Aktifkan “Sembunyikan UA WebView” bila login berbasis Google bermasalah, atau gunakan login email.'
+    ]
+  },
+  {
+    id: 'framer', name: 'Framer', source: 'url',
+    intro: 'Situs Framer dikonversi lewat domain yang sudah dipublikasikan.',
+    steps: [
+      'Publish ke domain .framer.website atau domain sendiri.',
+      'Cek breakpoint Phone di Framer agar tampilan HP rapi.',
+      'Animasi berat? Pilih indikator loading “Lingkaran di tengah” dan mode cache tinggi.'
+    ]
+  },
+  {
+    id: 'bubble', name: 'Bubble', source: 'url',
+    intro: 'Aplikasi Bubble berjalan di URL live (bukan versi test).',
+    steps: [
+      'Deploy ke Live, lalu pakai URL tanpa /version-test.',
+      'Atur halaman responsif (Responsive engine) untuk lebar HP.',
+      'Aktifkan upload file & kamera bila aplikasi memakai Picture/File Uploader.'
+    ]
+  },
+  {
+    id: 'squarespace', name: 'Squarespace', source: 'url',
+    intro: 'Situs Squarespace bisa dikonversi lewat domain publik.',
+    steps: [
+      'Pastikan situs tidak memakai Site-wide password (atau gunakan login member).',
+      'Salin domain situs dan pilih tab Website.',
+      'Aktifkan menu samping untuk tautan media sosial & kontak.'
+    ]
+  },
+  {
+    id: 'godaddy', name: 'GoDaddy Website Builder', source: 'url',
+    intro: 'Situs GoDaddy Websites + Marketing memakai domain yang sudah terhubung.',
+    steps: [
+      'Publish situs dan pastikan domain sudah aktif HTTPS.',
+      'Pakai alamat domain di tab Website.',
+      'Untuk toko online GoDaddy, aktifkan unduh file dan link luar ke browser untuk pembayaran.'
+    ]
+  },
+  {
+    id: 'html5-game', name: 'Game HTML5', source: 'zip',
+    intro: 'Game HTML5 (Phaser, Construct, GDevelop, Godot Web) cocok dibundel offline.',
+    steps: [
+      'Ekspor game sebagai HTML5/Web, lalu zip ISI folder ekspor (index.html di root).',
+      'Atur orientasi (lanskap/potret), aktifkan layar penuh dan layar tetap menyala.',
+      'Matikan tarik untuk refresh dan seleksi teks agar tidak mengganggu kontrol sentuh.',
+      'Ukuran besar? Batas ZIP 50 MB — kompres audio ke OGG/MP3 dan gambar ke WebP.'
+    ]
+  },
+  {
+    id: 'any-builder', name: 'Builder lainnya', source: 'url',
+    intro: 'Hampir semua website builder bisa dikonversi selama punya URL publik HTTPS.',
+    steps: [
+      'Publikasikan situs dan salin URL publiknya.',
+      'Uji URL di browser HP — yang tampil di sana itulah yang tampil di aplikasi.',
+      'Bisa mengekspor HTML? Zip hasil ekspor dan pakai tab ZIP agar berjalan offline.'
+    ]
+  },
+  {
     id: 'react-vite', name: 'React / Vue / Vite', source: 'zip',
     intro: 'Proyek SPA sendiri paling cocok dibundel offline lewat ZIP.',
     steps: [

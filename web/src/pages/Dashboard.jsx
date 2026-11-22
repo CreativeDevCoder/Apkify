@@ -13,8 +13,10 @@ import { ref, get, query, limitToLast, orderByChild } from 'firebase/database';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { swr, clearCache } from '../lib/cache';
-import { api, fileUrl, apiUrl } from '../lib/api';
+import { api, fileUrl } from '../lib/api';
 import StatusChip from '../components/StatusChip';
+import { RemoteDialog, KeystoreDialog } from '../components/AppDialogs';
+import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
 
 const toList = (obj) => Object.entries(obj || {}).map(([id, v]) => ({ id, ...v }));
 
@@ -24,6 +26,8 @@ export default function Dashboard() {
   const [builds, setBuilds] = useState(null);
   const [err, setErr] = useState('');
   const [confirm, setConfirm] = useState(null);
+  const [remoteApp, setRemoteApp] = useState(null);
+  const [ksApp, setKsApp] = useState(null);
 
   const load = useCallback((force = false) => {
     setErr('');
@@ -37,20 +41,6 @@ export default function Dashboard() {
   }, [user.uid]);
 
   useEffect(() => { load(); }, [load]);
-
-  async function downloadKeystore(app) {
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch(apiUrl(`/api/apps/${app.id}/keystore`), { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error((await res.json()).error || 'Gagal');
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${app.packageName}-keystore.zip`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (e) { setErr(e.message); }
-  }
 
   async function removeApp() {
     const app = confirm;
@@ -104,7 +94,8 @@ export default function Dashboard() {
                   {a.lastBuildId && <Button size="small" component={RouterLink} to={`/build/${a.lastBuildId}`}>Build terakhir</Button>}
                   <Button size="small" component={RouterLink} to={`/create/${a.id}`}>Update</Button>
                   <Box sx={{ flex: 1 }} />
-                  <Tooltip title="Unduh cadangan keystore"><IconButton size="small" onClick={() => downloadKeystore(a)}><KeyIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Remote Update"><IconButton size="small" onClick={() => setRemoteApp(a)}><SystemUpdateIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Keystore & Signing"><IconButton size="small" onClick={() => setKsApp(a)}><KeyIcon fontSize="small" /></IconButton></Tooltip>
                   <Tooltip title="Hapus"><IconButton size="small" onClick={() => setConfirm(a)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
                 </CardActions>
               </Card>
@@ -129,6 +120,8 @@ export default function Dashboard() {
         </>
       )}
 
+      <RemoteDialog app={remoteApp} onClose={() => setRemoteApp(null)} />
+      <KeystoreDialog app={ksApp} isAnon={isAnon} onClose={() => setKsApp(null)} />
       <Dialog open={!!confirm} onClose={() => setConfirm(null)}>
         <DialogTitle>Hapus {confirm?.name}?</DialogTitle>
         <DialogContent>

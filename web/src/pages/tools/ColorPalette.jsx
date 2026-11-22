@@ -2,6 +2,36 @@ import { useMemo, useState } from 'react';
 import { Container, Typography, Card, CardContent, Grid, Box, Stack, Snackbar } from '@mui/material';
 import ColorField from '../../components/ColorField';
 import { isHex } from '../../lib/validators';
+import FileDrop from '../../components/FileDrop';
+import { loadImage, fileToDataUrl } from '../../lib/iconGen';
+
+/** Ekstraksi warna dominan dari gambar: kuantisasi 4-bit per kanal + abaikan transparan/abu-abu ekstrem */
+async function extractColors(file, n = 6) {
+  const img = await loadImage(await fileToDataUrl(file));
+  const c = document.createElement('canvas');
+  const s = 96;
+  c.width = s; c.height = Math.max(1, Math.round((img.height / img.width) * s));
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  const d = ctx.getImageData(0, 0, c.width, c.height).data;
+  const buckets = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const key = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4);
+    const b = buckets.get(key) || { r: 0, g: 0, b: 0, n: 0 };
+    b.r += d[i]; b.g += d[i + 1]; b.b += d[i + 2]; b.n++;
+    buckets.set(key, b);
+  }
+  const hex = (v) => Math.round(v).toString(16).padStart(2, '0');
+  const picked = [];
+  for (const b of [...buckets.values()].sort((x, y) => y.n - x.n)) {
+    const col = [b.r / b.n, b.g / b.n, b.b / b.n];
+    if (picked.some((p) => Math.hypot(p[0] - col[0], p[1] - col[1], p[2] - col[2]) < 48)) continue;
+    picked.push(col);
+    if (picked.length >= n) break;
+  }
+  return picked.map((p) => `#${hex(p[0])}${hex(p[1])}${hex(p[2])}`);
+}
 
 const hexToHsl = (hex) => {
   let r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
@@ -29,6 +59,7 @@ const contrastText = (hex) => {
 
 export default function ColorPalette() {
   const [base, setBase] = useState('#4f46e5');
+  const [extracted, setExtracted] = useState([]);
   const [copied, setCopied] = useState('');
 
   const palette = useMemo(() => {
@@ -53,7 +84,15 @@ export default function ColorPalette() {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>Color Palette</Typography>
-      <Card sx={{ mb: 2 }}><CardContent><ColorField label="Warna dasar" value={base} onChange={setBase} /></CardContent></Card>
+      <Card sx={{ mb: 2 }}><CardContent><Stack spacing={2}>
+        <FileDrop accept="image/*" label="Ekstrak warna dari logo (opsional)" onFile={async (f) => { const cs = await extractColors(f); setExtracted(cs); if (cs[0]) setBase(cs[0]); }} />
+        {extracted.length > 0 && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            {extracted.map((c) => <Box key={c} onClick={() => { setBase(c); copy(c); }} title="Pakai & salin" sx={{ cursor: 'pointer', width: 72, height: 56, borderRadius: 2, bgcolor: c, color: contrastText(c), fontSize: 11, display: 'grid', placeItems: 'end center', pb: 0.5, border: base === c ? 3 : 0, borderColor: 'primary.main' }}>{c}</Box>)}
+          </Stack>
+        )}
+        <ColorField label="Warna dasar" value={base} onChange={setBase} />
+      </Stack></CardContent></Card>
       {palette && <>
         <Grid container spacing={2}>
           {palette.roles.map(([label, c]) => (

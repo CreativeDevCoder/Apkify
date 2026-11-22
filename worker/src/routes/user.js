@@ -22,11 +22,11 @@ export async function upload(req, env) {
   const buf = await file.arrayBuffer();
   const head = new Uint8Array(buf.slice(0, 8));
 
-  if (kind === 'icon') {
+  if (kind === 'icon' || kind === 'splash') {
     if (buf.byteLength > ICON_MAX) throw new HttpError(413, 'Ikon maksimal 2 MB');
     const isPng = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
     if (!isPng) throw new HttpError(400, 'Ikon harus PNG');
-    const r = await putFile(env, buf, { owner: user.uid, kind: 'icon', name: 'icon.png', mime: 'image/png', public: true });
+    const r = await putFile(env, buf, { owner: user.uid, kind, name: `${kind}.png`, mime: 'image/png', public: true });
     return json({ fileId: r.fileId });
   }
   if (kind === 'image') {
@@ -87,13 +87,20 @@ export async function createBuild(req, env, ctx) {
   if (owner && owner !== user.uid) throw new HttpError(409, 'Package name sudah dipakai pengguna lain. Gunakan nama lain.');
 
   // Validasi file milik user
-  for (const fid of [cfg.iconFileId, cfg.source.fileId].filter(Boolean)) {
+  for (const fid of [cfg.iconFileId, cfg.source.fileId, cfg.splash.fileId, cfg.errorPageFileId].filter(Boolean)) {
     const m = await getFileMeta(env, fid);
     if (!m || m.owner !== user.uid) throw new HttpError(403, 'File tidak valid');
   }
   if (!cfg.iconFileId) throw new HttpError(400, 'Ikon wajib ada');
 
   // HTML tempel -> simpan sebagai file (RTDB tetap ramping)
+  // Halaman error kustom -> file privat
+  if (cfg.errorPageHtml) {
+    const r = await putFile(env, new TextEncoder().encode(cfg.errorPageHtml), { owner: user.uid, kind: 'source', name: 'error.html', mime: 'text/html', public: false });
+    cfg.errorPageFileId = r.fileId;
+    delete cfg.errorPageHtml;
+  }
+
   if (cfg.source.type === 'html') {
     if (cfg.source.html) {
       const bytes = new TextEncoder().encode(cfg.source.html);
@@ -107,7 +114,11 @@ export async function createBuild(req, env, ctx) {
 
   const now = Date.now();
   if (!appId) appId = randomId(20);
-  const versionCode = (app?.versionCode || 0) + 1;
+  const auto = (app?.versionCode || 0) + 1;
+  if (cfg.versionCodeOverride && cfg.versionCodeOverride < auto) {
+    throw new HttpError(400, `Kode versi harus ≥ ${auto} (lebih besar dari build sebelumnya).`);
+  }
+  const versionCode = cfg.versionCodeOverride || auto;
   const buildId = randomId(20);
   const summary = { name: cfg.name, packageName: cfg.packageName, versionName: cfg.versionName, versionCode };
 

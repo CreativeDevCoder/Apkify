@@ -22,7 +22,7 @@ class UserError extends Error {}
 
 async function main() {
   const cfgRes = await api(`/api/internal/builds/${BUILD_ID}/config`);
-  const { config: c, versionCode, keystore, iconUrl, sourceUrl } = await cfgRes.json();
+  const { config: c, versionCode, keystore, iconUrl, sourceUrl, splashUrl, errorPageUrl, appId, apiBase } = await cfgRes.json();
   console.log(`Build ${BUILD_ID}: ${c.name} (${c.packageName}) v${c.versionName}/${versionCode} sumber=${c.source.type}`);
 
   fs.rmSync(WORK, { recursive: true, force: true });
@@ -44,6 +44,12 @@ async function main() {
     admob: c.admob,
     onesignal: c.onesignal,
     userAgentSuffix: c.userAgentSuffix || '',
+    appId, apiBase,
+    exitText: c.exitText || 'Keluar dari aplikasi?',
+    splashDurationMs: c.splash?.durationMs || 0,
+    progress: c.progress || { style: 'bar' },
+    tawk: c.features.tawk ? c.tawk : null,
+    supabase: c.features.supabase ? c.supabase : null,
     encrypted: c.source.type !== 'url' && c.features.encrypt !== false
   };
   fs.writeFileSync(path.join(ASSETS, 'apkify.json'), JSON.stringify(runtime, null, 2));
@@ -52,14 +58,18 @@ async function main() {
   fs.writeFileSync(path.join(RES, 'values/strings.xml'),
     `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <string name="app_name">${xml(c.name)}</string>\n</resources>\n`);
   fs.writeFileSync(path.join(RES, 'values/colors.xml'),
-    `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="primary">${c.colors.primary}</color>\n  <color name="status_bar">${c.colors.statusBar}</color>\n  <color name="splash_bg">${c.colors.splashBg}</color>\n  <color name="icon_bg">#FFFFFF</color>\n</resources>\n`);
+    `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="primary">${c.colors.primary}</color>\n  <color name="accent">${c.colors.accent || c.colors.primary}</color>\n  <color name="status_bar">${c.colors.statusBar}</color>\n  <color name="splash_bg">${c.colors.splashBg}</color>\n  <color name="icon_bg">#FFFFFF</color>\n</resources>\n`);
 
   // ---- Manifest ----
   const perms = ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'];
-  if (c.features.geolocation) perms.push('android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION');
-  if (c.features.camera) perms.push('android.permission.CAMERA', 'android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS');
-  if (c.features.onesignal) perms.push('android.permission.POST_NOTIFICATIONS');
-  if (c.features.keepAwake) perms.push('android.permission.WAKE_LOCK');
+  const F = c.features;
+  if (F.geolocation) perms.push('android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION');
+  if (F.camera) perms.push('android.permission.CAMERA');
+  if (F.microphone) perms.push('android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS');
+  if (F.onesignal || F.notifications) perms.push('android.permission.POST_NOTIFICATIONS');
+  if (F.vibrate || F.jsApi) perms.push('android.permission.VIBRATE');
+  if (F.keepAwake) perms.push('android.permission.WAKE_LOCK');
+  if (F.downloads) perms.push('android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28');
   const orientation = { portrait: 'portrait', landscape: 'landscape' }[c.orientation] || 'unspecified';
   let manifest = fs.readFileSync(path.join(WORK, 'app/src/main/AndroidManifest.xml'), 'utf8');
   manifest = manifest
@@ -67,7 +77,19 @@ async function main() {
     .replace('__ORIENTATION__', orientation)
     .replace('<!--ADMOB-->', c.features.admob
       ? `<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${xml(c.admob.appId)}" />`
-      : '');
+      : '')
+    .replace('android:usesCleartextTraffic="false"', `android:usesCleartextTraffic="${F.httpsOnly ? 'false' : 'true'}"`);
+  // Deep linking: tautan ke domain situs dibuka langsung di aplikasi
+  if (F.deepLinking && c.source.type === 'url') {
+    const host = new URL(c.source.url).hostname;
+    manifest = manifest.replace('<!--DEEPLINK-->', `<intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="${xml(host)}" />
+                <data android:scheme="http" android:host="${xml(host)}" />
+            </intent-filter>`);
+  }
   if (c.features.camera) manifest = manifest.replace('<!--FEATURES-->', '<uses-feature android:name="android.hardware.camera" android:required="false" />');
   fs.writeFileSync(path.join(WORK, 'app/src/main/AndroidManifest.xml'), manifest);
 
@@ -97,7 +119,12 @@ async function main() {
   }
   const nodpi = path.join(RES, 'drawable-nodpi');
   fs.mkdirSync(nodpi, { recursive: true });
-  await sharp(iconPath).resize(512, 512, { fit: 'cover' }).png().toFile(path.join(nodpi, 'splash_logo.png'));
+  // Splash: gambar kustom (bila diunggah) atau ikon aplikasi
+  const splashSrc = splashUrl ? await download(new URL(splashUrl).pathname, path.join(TMP, 'splash.png')) : iconPath;
+  await sharp(splashSrc).resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toFile(path.join(nodpi, 'splash_logo.png'));
+
+  // Halaman error kustom
+  if (errorPageUrl) await download(new URL(errorPageUrl).pathname, path.join(ASSETS, 'error.html'));
 
   // ---- Konten lokal (ZIP / HTML) ----
   if (c.source.type !== 'url') {
@@ -148,6 +175,14 @@ async function main() {
   mask(ks.storePass);
   mask(ks.keyPass);
   fs.writeFileSync(ksFile, Buffer.from(ks.keystore, 'base64'));
+  if (ks.custom) {
+    // keystore unggahan pengguna: pastikan password & alias benar sebelum Gradle
+    try {
+      execFileSync('keytool', ['-list', '-keystore', ksFile, '-storepass', ks.storePass, '-alias', ks.alias], { stdio: 'pipe' });
+    } catch {
+      throw new UserError('Keystore Anda tidak bisa dibuka: password atau alias salah. Unggah ulang keystore dengan data yang benar.');
+    }
+  }
   setEnv('KS_FILE', ksFile);
   setEnv('KS_STORE_PASS', ks.storePass);
   setEnv('KS_KEY_PASS', ks.keyPass);

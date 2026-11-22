@@ -9,8 +9,11 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Message
+import android.os.SystemClock
 import android.view.Menu
 import android.view.View
 import android.view.WindowManager
@@ -45,8 +48,13 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
+import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
@@ -54,7 +62,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private lateinit var swipe: SwipeRefreshLayout
     private lateinit var progress: ProgressBar
+    private lateinit var spinner: ProgressBar
     private lateinit var drawer: DrawerLayout
+    private lateinit var toolbar: MaterialToolbar
     private lateinit var assetLoader: WebViewAssetLoader
     private val encrypted by lazy { EncryptedAssets(this) }
 
@@ -62,8 +72,14 @@ class MainActivity : AppCompatActivity() {
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
     private var pendingPermission: PermissionRequest? = null
     private var showingOffline = false
+    private var docStartScript = false
+    private val startedAt = SystemClock.elapsedRealtime()
 
     private val startHost by lazy { Uri.parse(cfg.startUrl).host.orEmpty() }
+    private val errorPage by lazy {
+        if (runCatching { assets.open("error.html").close() }.isSuccess) "https://$ASSET_HOST/assets/error.html"
+        else "https://$ASSET_HOST/assets/offline.html"
+    }
 
     // ---------- Activity result launchers ----------
     private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -88,27 +104,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         cfg = AppConfig.get(this)
+        // Durasi splash minimum (ms) sesuai pengaturan
+        splash.setKeepOnScreenCondition { SystemClock.elapsedRealtime() - startedAt < cfg.splashDurationMs }
         setContentView(R.layout.activity_main)
 
         web = findViewById(R.id.web)
         swipe = findViewById(R.id.swipe)
         progress = findViewById(R.id.progress)
+        spinner = findViewById(R.id.spinner)
         drawer = findViewById(R.id.drawer)
+        toolbar = findViewById(R.id.toolbar)
 
-        setupSystemBars()
+        if (cfg.disallowScreenshot) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (cfg.keepAwake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setupSystemBars()
+        setupToolbar()
         setupSideMenu()
         setupWebView()
 
         swipe.isEnabled = cfg.pullToRefresh
-        swipe.setColorSchemeColors(parse(cfg.primary))
+        swipe.setColorSchemeColors(parse(cfg.accent))
         swipe.setOnRefreshListener { if (showingOffline) reloadStart() else web.reload() }
         swipe.setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 }
 
-        if (cfg.admob) Ads.init(this, findViewById<FrameLayout>(R.id.adContainer), cfg.admobBannerId)
+        if (cfg.admob) Ads.init(this, findViewById<FrameLayout>(R.id.adContainer), cfg)
         if (cfg.onesignal) Push.requestPermission()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -116,6 +138,8 @@ class MainActivity : AppCompatActivity() {
                 when {
                     drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
                     web.canGoBack() && !showingOffline -> web.goBack()
+                    cfg.confirmExit -> AlertDialog.Builder(this@MainActivity).setMessage(cfg.exitText)
+                        .setPositiveButton("Ya") { _, _ -> finish() }.setNegativeButton("Batal", null).show()
                     else -> finish()
                 }
             }
@@ -123,6 +147,7 @@ class MainActivity : AppCompatActivity() {
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState) else web.loadUrl(cfg.startUrl)
         handleDeepLink(intent)
+        Remote.check(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -131,7 +156,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        // URL dari notifikasi push (OneSignal launchURL) / intent VIEW
+        // URL dari deep link (domain situs) atau notifikasi push
         val url = intent?.data?.toString() ?: return
         if (url.startsWith("http")) web.loadUrl(url)
     }
@@ -153,9 +178,20 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            val top = if (cfg.fullscreen) 0 else bars.top
-            v.setPadding(bars.left, top, bars.right, maxOf(bars.bottom, ime.bottom))
+            v.setPadding(bars.left, if (cfg.fullscreen) 0 else bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
             insets
+        }
+    }
+
+    // ---------- Toolbar (judul, judul live, tombol Home) ----------
+    private fun setupToolbar() {
+        if (!cfg.showToolbar) return
+        toolbar.visibility = View.VISIBLE
+        toolbar.title = cfg.name
+        toolbar.setTitleTextColor(Color.WHITE)
+        if (cfg.homeButton) {
+            toolbar.menu.add(0, HOME_ID, 0, "Beranda").setIcon(R.drawable.ic_home).setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            toolbar.setOnMenuItemClickListener { if (it.itemId == HOME_ID) { reloadStart(); true } else false }
         }
     }
 
@@ -165,14 +201,8 @@ class MainActivity : AppCompatActivity() {
             drawer.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
             return
         }
-        val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
-        toolbar.visibility = View.VISIBLE
-        toolbar.title = cfg.name
-        toolbar.setTitleTextColor(Color.WHITE)
         toolbar.setNavigationIcon(R.drawable.ic_menu)
-        toolbar.navigationIcon?.setTint(Color.WHITE)
         toolbar.setNavigationOnClickListener { drawer.openDrawer(GravityCompat.START) }
-
         val nav = findViewById<NavigationView>(R.id.nav)
         val m = nav.menu
         m.add(0, 1, 0, "Beranda")
@@ -195,6 +225,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---------- User-Agent ----------
+    private fun buildUserAgent(base: String): String {
+        var ua = base
+        if (cfg.desktopMode) {
+            val chrome = Regex("Chrome/([\\d.]+)").find(base)?.groupValues?.get(1) ?: "120.0.0.0"
+            ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$chrome Safari/537.36"
+        } else {
+            if (cfg.hideWebViewUA) ua = ua.replace("; wv)", ")").replace(Regex("Version/\\d+(\\.\\d+)* "), "")
+            if (cfg.hideMobileUA) ua = ua.replace(" Mobile", "").replace(Regex("\\(Linux; Android [^)]*\\)"), "(X11; Linux x86_64)")
+        }
+        if (cfg.userAgentSuffix.isNotBlank()) ua = "$ua ${cfg.userAgentSuffix}"
+        return ua
+    }
+
     // ---------- WebView ----------
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
@@ -206,57 +250,86 @@ class MainActivity : AppCompatActivity() {
         with(web.settings) {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
+            @Suppress("DEPRECATION") databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
             loadWithOverviewMode = true
             useWideViewPort = true
-            setSupportZoom(cfg.zoom)
-            builtInZoomControls = cfg.zoom
-            displayZoomControls = false
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = true
+            setSupportZoom(cfg.zoom || cfg.zoomButtons || cfg.desktopMode)
+            builtInZoomControls = cfg.zoom || cfg.zoomButtons || cfg.desktopMode
+            displayZoomControls = cfg.zoomButtons
+            allowFileAccess = cfg.allowFileAccess
+            allowContentAccess = cfg.allowFileAccess
+            javaScriptCanOpenWindowsAutomatically = !cfg.popupBlocker
+            setSupportMultipleWindows(!cfg.popupBlocker)
             setGeolocationEnabled(cfg.geolocation)
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            // Strategi cache WebView (diatur dari dashboard):
+            mixedContentMode = if (cfg.httpsOnly) WebSettings.MIXED_CONTENT_NEVER_ALLOW else WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            @Suppress("DEPRECATION") saveFormData = cfg.saveFormData
             cacheMode = when (cfg.cacheMode) {
                 "cacheElseNetwork" -> WebSettings.LOAD_CACHE_ELSE_NETWORK
                 "noCache" -> WebSettings.LOAD_NO_CACHE
                 else -> WebSettings.LOAD_DEFAULT
             }
-            if (cfg.userAgentSuffix.isNotBlank()) userAgentString = "$userAgentString ${cfg.userAgentSuffix}"
+            userAgentString = buildUserAgent(userAgentString)
+        }
+        web.isVerticalScrollBarEnabled = cfg.scrollbars
+        web.isHorizontalScrollBarEnabled = cfg.scrollbars
+        if (!cfg.saveFormData && Build.VERSION.SDK_INT >= 26) web.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        if (!cfg.textSelection) {
+            web.setOnLongClickListener { true }
+            web.isLongClickable = false
+            web.isHapticFeedbackEnabled = false
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.addJavascriptInterface(Bridge(this), "ApkifyBridge")
 
+        // window.APKIFY / window.Apkify disuntikkan sebelum skrip halaman berjalan (bila didukung WebView)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            WebViewCompat.addDocumentStartJavaScript(web, Scripts.apiShim(cfg), setOf("*"))
+            docStartScript = true
+        }
+
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val u = request.url
-                if (cfg.encrypted && u.host == "appassets.androidplatform.net" && (u.path ?: "").startsWith("/assets/www/")) {
-                    return encrypted.serve(Uri.decode(u.encodedPath!!.removePrefix("/assets/www/")))
+                if (u.host == ASSET_HOST && (u.path ?: "").startsWith("/assets/www/")) {
+                    val rel = Uri.decode(u.encodedPath!!.removePrefix("/assets/www/"))
+                    Remote.otaDir(this@MainActivity)?.let { dir -> Remote.serveOta(dir, rel)?.let { return it } }
+                    if (cfg.encrypted) return encrypted.serve(rel)
                 }
-                return assetLoader.shouldInterceptRequest(u)
+                if (u.host == ASSET_HOST) return assetLoader.shouldInterceptRequest(u)
+                if (cfg.local && cfg.crossOrigin && request.method == "GET" && !request.isForMainFrame && u.scheme == "https") {
+                    return corsProxy(request)
+                }
+                return null
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 handleUrl(request.url, request.isForMainFrame)
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                progress.visibility = View.VISIBLE
+                when (cfg.progressStyle) {
+                    "bar" -> progress.visibility = View.VISIBLE
+                    "spinner" -> spinner.visibility = View.VISIBLE
+                }
+                Ads.onNavigation(this@MainActivity)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
                 progress.visibility = View.GONE
+                spinner.visibility = View.GONE
                 swipe.isRefreshing = false
-                showingOffline = url.endsWith("/assets/offline.html")
+                showingOffline = url == errorPage
+                if (!docStartScript) view.evaluateJavascript(Scripts.apiShim(cfg), null)
+                if (!cfg.textSelection) view.evaluateJavascript(Scripts.NO_SELECT, null)
+                if (cfg.tawkPropertyId.isNotBlank() && !showingOffline) view.evaluateJavascript(Scripts.tawk(cfg.tawkPropertyId, cfg.tawkWidgetId), null)
                 CookieManager.getInstance().flush()
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame && cfg.offlinePage && !request.url.toString().endsWith("offline.html")) {
+                if (request.isForMainFrame && cfg.offlinePage && request.url.toString() != errorPage) {
                     showingOffline = true
-                    view.loadUrl("https://appassets.androidplatform.net/assets/offline.html")
+                    view.loadUrl(errorPage)
                 }
             }
         }
@@ -264,6 +337,26 @@ class MainActivity : AppCompatActivity() {
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) {
                 progress.progress = newProgress
+            }
+
+            override fun onReceivedTitle(view: WebView, title: String?) {
+                if (cfg.showToolbar && cfg.liveTitle && !title.isNullOrBlank() && !showingOffline && !title.startsWith("http")) toolbar.title = title
+            }
+
+            // Pop-up (window.open / target=_blank) dibuka di WebView utama bila pop-up blocker mati
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+                if (cfg.popupBlocker) return false
+                val temp = WebView(this@MainActivity)
+                temp.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
+                        if (!handleUrl(r.url, true)) web.loadUrl(r.url.toString())
+                        v.destroy()
+                        return true
+                    }
+                }
+                (resultMsg.obj as WebView.WebViewTransport).webView = temp
+                resultMsg.sendToTarget()
+                return true
             }
 
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
@@ -292,13 +385,14 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPermissionRequest(request: PermissionRequest) {
-                if (!cfg.camera) return request.deny()
                 val need = mutableListOf<String>()
-                if (request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) need += Manifest.permission.CAMERA
-                if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) need += Manifest.permission.RECORD_AUDIO
+                if (cfg.camera && request.resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) need += Manifest.permission.CAMERA
+                if (cfg.microphone && request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) need += Manifest.permission.RECORD_AUDIO
                 if (need.isEmpty()) return request.deny()
                 if (need.all { has(it) }) {
-                    request.grant(request.resources)
+                    request.grant(request.resources.filter {
+                        (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE && cfg.camera) || (it == PermissionRequest.RESOURCE_AUDIO_CAPTURE && cfg.microphone)
+                    }.toTypedArray())
                 } else {
                     pendingPermission = request
                     mediaPerm.launch(need.toTypedArray())
@@ -330,6 +424,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * "Allow Cross-Origin" untuk konten lokal: permintaan GET ke API luar diambil secara native
+     * lalu dikembalikan dengan header CORS terbuka (berjalan di thread latar WebView).
+     */
+    private fun corsProxy(request: WebResourceRequest): WebResourceResponse? = try {
+        val conn = (URL(request.url.toString()).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000; readTimeout = 30_000
+            request.requestHeaders.forEach { (k, v) -> if (!k.equals("Origin", true) && !k.equals("Referer", true)) setRequestProperty(k, v) }
+            CookieManager.getInstance().getCookie(request.url.toString())?.let { setRequestProperty("Cookie", it) }
+        }
+        val code = conn.responseCode
+        if (code in 300..399 || code < 100 || code > 599) return null // WebResourceResponse menolak kode redirect
+        val type = conn.contentType ?: "application/octet-stream"
+        val stream = (if (code >= 400) conn.errorStream else conn.inputStream) ?: ByteArrayInputStream(ByteArray(0))
+        WebResourceResponse(type.substringBefore(';').trim(), Regex("charset=([\\w-]+)").find(type)?.groupValues?.get(1),
+            code, conn.responseMessage?.ifBlank { "OK" } ?: "OK",
+            mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Headers" to "*"), stream)
+    } catch (e: Exception) {
+        null
+    }
+
     /** true = ditangani di luar WebView */
     private fun handleUrl(uri: Uri, mainFrame: Boolean): Boolean {
         val scheme = uri.scheme?.lowercase().orEmpty()
@@ -353,7 +468,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (!mainFrame) return false
         val host = uri.host.orEmpty()
-        if (host == "appassets.androidplatform.net") return false
+        if (host == ASSET_HOST) return false
         val internal = !cfg.local && (host == startHost || host.endsWith(".$startHost") || startHost.endsWith(".$host"))
         if (!internal && cfg.externalLinksInBrowser) {
             openExternal(uri)
@@ -362,7 +477,7 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-    private fun openExternal(uri: Uri) {
+    fun openExternal(uri: Uri) {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: ActivityNotFoundException) {
@@ -396,5 +511,10 @@ class MainActivity : AppCompatActivity() {
         Ads.destroy()
         web.destroy()
         super.onDestroy()
+    }
+
+    companion object {
+        const val ASSET_HOST = "appassets.androidplatform.net"
+        private const val HOME_ID = 9001
     }
 }

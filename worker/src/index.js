@@ -5,6 +5,7 @@ import { serveFile } from './routes/files.js';
 import { getConfig, getFile, saveKeystore, uploadArtifact, finish } from './routes/internal.js';
 import { handleAdmin } from './routes/admin.js';
 import { aiGenerate, aiQuota } from './routes/ai.js';
+import { uploadKeystore, getRemote, ownerRemote, uploadBundle, mySites, publishSite, deleteSite, serveSite } from './routes/extra.js';
 import {
   listPosts, getPost, adminPosts, listMarket, getListing, myListings, saveListing, markSold, deleteListing, adminMarket, contact, adminMessages
 } from './routes/content.js';
@@ -47,6 +48,16 @@ async function route(req, env, ctx) {
     if (m === 'DELETE') return deleteListing(req, env, r[1]);
   }
   if ((r = p.match(/^\/api\/market\/([A-Za-z0-9]+)\/sold$/)) && m === 'POST') return markSold(req, env, r[1]);
+
+  if ((r = p.match(/^\/api\/public\/apps\/([A-Za-z0-9]+)\/remote$/)) && m === 'GET') return getRemote(req, env, ctx, r[1]);
+  if (p === '/api/keystores' && m === 'POST') return uploadKeystore(req, env);
+  if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/remote$/)) && (m === 'GET' || m === 'PUT')) return ownerRemote(req, env, r[1]);
+  if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/bundle$/)) && m === 'POST') return uploadBundle(req, env, ctx, r[1]);
+  if (p === '/api/sites/mine' && m === 'GET') return mySites(req, env);
+  if ((r = p.match(/^\/api\/sites\/([a-z0-9-]+)$/))) {
+    if (m === 'POST') return publishSite(req, env, ctx, r[1]);
+    if (m === 'DELETE') return deleteSite(req, env, ctx, r[1]);
+  }
 
   if (p === '/api/uploads' && m === 'POST') return upload(req, env);
   if (p === '/api/builds' && m === 'POST') return createBuild(req, env, ctx);
@@ -101,6 +112,11 @@ async function pruneQuotas(env) {
 
 export default {
   async fetch(req, env, ctx) {
+    // Hosting subdomain: namaanda.HOSTING_DOMAIN
+    const host = new URL(req.url).hostname;
+    if (env.HOSTING_DOMAIN && host.endsWith(`.${env.HOSTING_DOMAIN}`)) {
+      try { return await serveSite(req, env, ctx); } catch (e) { console.error(e); return new Response('Server error', { status: 500 }); }
+    }
     const cors = corsHeaders(env, req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     let res;

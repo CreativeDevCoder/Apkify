@@ -34,13 +34,15 @@ class EncryptedAssets(private val ctx: Context) {
             return null
         }
         val mime = mimeOf(rel)
-        val text = mime.startsWith("text/") || mime.contains("javascript") || mime.contains("json") || mime.contains("svg") || mime.contains("xml")
-        return WebResourceResponse(mime, if (text) "utf-8" else null, ByteArrayInputStream(plain)).apply {
+        return WebResourceResponse(mime, if (isText(mime)) "utf-8" else null, ByteArrayInputStream(plain)).apply {
             responseHeaders = mapOf("Cache-Control" to "no-cache", "Access-Control-Allow-Origin" to "*")
         }
     }
 
-    private fun mimeOf(name: String): String {
+    companion object {
+    fun isText(mime: String) = mime.startsWith("text/") || mime.contains("javascript") || mime.contains("json") || mime.contains("svg") || mime.contains("xml")
+
+    fun mimeOf(name: String): String {
         val ext = name.substringAfterLast('.', "").lowercase()
         return when (ext) {
             "html", "htm" -> "text/html"
@@ -55,5 +57,6 @@ class EncryptedAssets(private val ctx: Context) {
             "ttf" -> "font/ttf"
             else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
         }
+    }
     }
 }

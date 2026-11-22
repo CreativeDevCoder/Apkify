@@ -30,7 +30,16 @@ export default function QrGenerator() {
           <Typography>Ukuran: {size}px</Typography>
           <Slider value={size} min={128} max={1024} step={64} onChange={(_, v) => setSize(v)} />
           {src && <Box sx={{ textAlign: 'center' }}><img src={src} alt="QR" style={{ width: 240, height: 240 }} /></Box>}
-          <Button variant="contained" disabled={!src} href={src} download="qrcode.png">Unduh PNG</Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" disabled={!src} href={src} download="qrcode.png" sx={{ flex: 1 }}>Unduh PNG</Button>
+            <Button variant="outlined" disabled={!src} sx={{ flex: 1 }} onClick={async () => {
+              const svg = await QRCode.toString(text, { type: 'svg', margin: 2, color: { dark: fg, light: bg }, errorCorrectionLevel: 'M' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+              a.download = 'qrcode.svg';
+              a.click();
+            }}>Unduh SVG</Button>
+          </Stack>
         </Stack>
       </CardContent></Card>
     </Container>

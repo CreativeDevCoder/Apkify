@@ -37,6 +37,12 @@ Platform gratis untuk mengubah **website, ZIP (hasil build React/Vite/Vue), atau
 
 Tambahan dibanding referensi: dashboard “Aplikasi Saya”, riwayat build, update versi (versionCode otomatis naik), status build realtime + QR unduh, notifikasi email, halaman offline, panel admin untuk kuota 10 email & 10 drive.
 
+### Fitur ala Website 2 APK Builder Pro (rilis 3)
+Splash kustom + durasi + pratinjau, skema warna Material (utama/gelap/aksen), indikator loading (garis/lingkaran/tanpa), toolbar + judul live + tombol Home, konfirmasi keluar dengan teks sendiri, halaman error HTML sendiri, pilihan izin (kamera, mikrofon, lokasi, getar), mode cache 3 tingkat, User-Agent (sembunyikan WebView/Mobile, mode desktop), zoom & tombol zoom, scrollbar, seleksi teks, simpan form, larang screenshot, hanya-HTTPS, akses file, cross-origin untuk konten lokal, deep linking, pop-up blocker, JavaScript API (`window.Apkify`), kode versi manual, dan **keystore sendiri** (Keystore & Signing).
+
+### Fitur AppMint yang diadopsi (rilis 3)
+AI App Builder (+ opsi backend Supabase), hosting subdomain HTTPS gratis, aplikasi dokumen/audio/video/foto (Media App Maker), Remote Update (pesan, paksa update, konten OTA), keystore sendiri, plugin native lewat JavaScript API, dan tombol dukungan/donasi. *Penjualan dalam aplikasi* tersedia sebagai template katalog + checkout WhatsApp; Google Play Billing untuk barang digital belum didukung.
+
 ## 2. Arsitektur
 
 ```
@@ -127,6 +133,11 @@ Penyedia yang secret-nya belum diisi otomatis dilewati — Anda bisa mulai dari 
 - **Formulir kontak:** isi `ADMIN_EMAIL` di `wrangler.toml` (pesan juga tersimpan di Admin → Pesan kontak).
 - **Aplikasi pendamping:** build situs Apkify Anda sendiri lewat Apkify (sumber Website), lalu isi `VITE_COMPANION_APK_URL` (link unduh APK dari halaman build) atau `VITE_COMPANION_PLAY_URL`.
 - **Rules RTDB:** tempel ulang `database.rules.json` (ada indeks baru untuk posts, market, messages).
+
+### A3. Fitur rilis 3
+- **Hosting subdomain:** isi `HOSTING_DOMAIN` (mis. `apps.domainanda.com`) di `wrangler.toml`, buat DNS wildcard `*.apps` (proxied/oranye) ke domain Anda, dan aktifkan route `*.apps.domainanda.com/*` ke Worker. File situs disimpan di R2.
+- **Remote Update:** isi `PUBLIC_API_BASE` (URL publik API) agar aplikasi Android bisa mengecek pesan/paksa update/konten OTA.
+- **Halaman legal & donasi:** isi `VITE_CONTACT_EMAIL` dan (opsional) `VITE_DONATE_URL` di `.env` Pages. Teks Privasi/Ketentuan adalah draf — tinjau dengan ahli hukum.
 
 ### B. GitHub builder
 1. Repo ini (**publik**) sudah berisi workflow `.github/workflows/build-apk.yml` yang memakai `builder/scripts` & `builder/android-template` — tidak perlu repo terpisah.

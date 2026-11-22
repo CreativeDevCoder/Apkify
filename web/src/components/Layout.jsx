@@ -25,6 +25,8 @@ import NewspaperIcon from '@mui/icons-material/Newspaper';
 import InfoIcon from '@mui/icons-material/Info';
 import MailIcon from '@mui/icons-material/Mail';
 import AndroidIcon from '@mui/icons-material/Android';
+import CloudIcon from '@mui/icons-material/Cloud';
+import PermMediaIcon from '@mui/icons-material/PermMedia';
 import { useAuth } from '../context/AuthContext';
 import { useColorMode } from '../context/ColorMode';
 
@@ -39,6 +41,8 @@ const MAIN = [
 ];
 const MORE = [
   { to: '/dashboard', label: 'Studio (Aplikasi Saya)', icon: <AppsIcon /> },
+  { to: '/hosting', label: 'Hosting gratis', icon: <CloudIcon /> },
+  { to: '/media-app', label: 'Media App Maker', icon: <PermMediaIcon /> },
   { to: '/docs', label: 'Panduan', icon: <MenuBookIcon /> },
   { to: '/guides', label: 'Panduan per platform', icon: <HubIcon /> },
   { to: '/features', label: 'Fitur', icon: <StarsIcon /> },
@@ -145,9 +149,9 @@ export default function Layout({ children }) {
               <Typography variant="body2" color="text.secondary">Website, ZIP, atau HTML ke APK & AAB — gratis, tanpa watermark.</Typography>
             </Grid>
             {[
-              ['Produk', [['/create', 'Buat aplikasi'], ['/ai-studio', 'AI Studio'], ['/templates', 'Template'], ['/market', 'Marketplace'], ['/get-app', 'Aplikasi Android']]],
-              ['Sumber daya', [['/docs', 'Panduan'], ['/guides', 'Per platform'], ['/docs#publish', 'Publikasi Play Store'], ['/tools', 'Tools gratis'], ['/news', 'Berita']]],
-              ['Perusahaan', [['/about', 'Tentang'], ['/features', 'Fitur'], ['/compare', 'Bandingkan'], ['/pricing', 'Harga'], ['/contact', 'Kontak']]]
+              ['Produk', [['/create', 'Buat aplikasi'], ['/ai-studio', 'AI Studio'], ['/templates', 'Template'], ['/market', 'Marketplace'], ['/hosting', 'Hosting gratis'], ['/media-app', 'Media App'], ['/get-app', 'Aplikasi Android']]],
+              ['Sumber daya', [['/docs', 'Panduan'], ['/guides', 'Per platform'], ['/docs#publish', 'Publikasi Play Store'], ['/tools', 'Tools gratis'], ['/news', 'Berita'], ['/website-to-app', 'Website ke aplikasi'], ['/html-to-app', 'HTML ke APK']]],
+              ['Perusahaan', [['/about', 'Tentang'], ['/features', 'Fitur'], ['/compare', 'Bandingkan'], ['/pricing', 'Harga'], ['/contact', 'Kontak'], ['/privacy', 'Kebijakan Privasi'], ['/terms', 'Syarat & Ketentuan']]]
             ].map(([h, links]) => (
               <Grid item xs={6} md={2.66} key={h}>
                 <Typography fontWeight={700} variant="body2" gutterBottom>{h}</Typography>

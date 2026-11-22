@@ -36,6 +36,11 @@ const PromoVideo = lazy(() => import('./pages/tools/PromoVideo'));
 const ListingPreview = lazy(() => import('./pages/tools/ListingPreview'));
 const DescriptionTemplates = lazy(() => import('./pages/tools/DescriptionTemplates'));
 const ListingChecklist = lazy(() => import('./pages/tools/ListingChecklist'));
+const PwaBuilder = lazy(() => import('./pages/tools/PwaBuilder'));
+const Legal = lazy(() => import('./pages/Legal'));
+const Landing = lazy(() => import('./pages/Landing'));
+const Hosting = lazy(() => import('./pages/Hosting'));
+const MediaApp = lazy(() => import('./pages/MediaApp'));
 
 const Fallback = () => <Box sx={{ position: 'fixed', top: 0, left: 0, right: 0 }}><LinearProgress /></Box>;
 
@@ -78,6 +83,12 @@ export default function App() {
           <Route path="/market/edit/:id" element={<ProtectedRoute><MarketSell /></ProtectedRoute>} />
           <Route path="/market/:id" element={<MarketDetail />} />
           <Route path="/get-app" element={<GetApp />} />
+          <Route path="/tools/pwa-builder" element={<PwaBuilder />} />
+          <Route path="/privacy" element={<Legal type="privacy" />} />
+          <Route path="/terms" element={<Legal type="terms" />} />
+          <Route path="/hosting" element={<Hosting />} />
+          <Route path="/media-app" element={<MediaApp />} />
+          {['/website-to-app', '/convert-website-to-mobile-app', '/html-to-app', '/ai-website-to-app'].map((p) => <Route key={p} path={p} element={<Landing />} />)}
           <Route path="/admin" element={<ProtectedRoute admin><Admin /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

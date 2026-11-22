@@ -41,7 +41,11 @@ export async function getConfig(req, env, buildId) {
   return json({
     buildId, versionCode: bc.versionCode, config: bc.config, keystore,
     iconUrl: `${origin}/api/internal/files/${bc.config.iconFileId}`,
-    sourceUrl: bc.config.source.fileId ? `${origin}/api/internal/files/${bc.config.source.fileId}` : null
+    sourceUrl: bc.config.source.fileId ? `${origin}/api/internal/files/${bc.config.source.fileId}` : null,
+    splashUrl: bc.config.splash?.fileId ? `${origin}/api/internal/files/${bc.config.splash.fileId}` : null,
+    errorPageUrl: bc.config.errorPageFileId ? `${origin}/api/internal/files/${bc.config.errorPageFileId}` : null,
+    appId: b.appId,
+    apiBase: (env.PUBLIC_API_BASE || origin).replace(/\/$/, '')
   });
 }
 

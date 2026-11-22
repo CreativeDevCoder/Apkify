@@ -1,13 +1,8 @@
 // Template aplikasi siap pakai. Template "html" membawa kode lengkap yang berjalan offline.
-const page = (title, color, body, script = '') => `<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
-<style>*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Roboto,sans-serif;background:#f6f7fb;color:#1f2330}
-header{background:${color};color:#fff;padding:20px 16px}header h1{margin:0;font-size:20px}main{padding:16px;max-width:640px;margin:auto}
-.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-button,.btn{background:${color};color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:600;width:100%;display:block;text-align:center;text-decoration:none}
-input,textarea,select{width:100%;padding:12px;border:1px solid #dde;border-radius:10px;font-size:15px;margin:6px 0 12px}
-.row{display:flex;gap:8px}.row>*{flex:1}.muted{color:#778}</style></head><body>${body}<script>${script}</script></body></html>`;
+import { page } from './templatePage';
+import { MORE_TEMPLATES } from './templates-more';
 
-export const TEMPLATES = [
+export const BASE_TEMPLATES = [
   {
     id: 'store-whatsapp', name: 'Katalog Toko + WhatsApp', category: 'Bisnis', color: '#16a34a',
     desc: 'Katalog produk sederhana dengan tombol pesan via WhatsApp. Edit daftar produk di dalam kode.',
@@ -75,3 +70,5 @@ el.innerHTML='<b>'+Q[i][0]+'</b><br><br>'+Q[i][1].map((o,k)=>'<button style="mar
     preset: { features: { fullscreen: true, keepAwake: true, pullToRefresh: false }, orientation: 'landscape' }
   }
 ];
+
+export const TEMPLATES = [...BASE_TEMPLATES, ...MORE_TEMPLATES];

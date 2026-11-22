@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import {
   Container, Typography, Card, CardContent, Tabs, Tab, TextField, Grid, Stack, Button, Switch,
   FormControlLabel, Alert, Box, MenuItem, Divider, LinearProgress, Avatar, ToggleButtonGroup,
-  ToggleButton, Accordion, AccordionSummary, AccordionDetails, IconButton, Chip
+  ToggleButton, Accordion, AccordionSummary, AccordionDetails, IconButton, Chip, Slider, Tooltip, Link
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -12,12 +12,14 @@ import CodeIcon from '@mui/icons-material/Code';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { clearCache } from '../lib/cache';
 import { TEMPLATES } from '../lib/templates';
+import { takeHandoff } from '../lib/handoff';
 import FileDrop from '../components/FileDrop';
 import ColorField from '../components/ColorField';
 import { validatePackage, suggestPackage, normalizeUrl, validateUrl, isHex } from '../lib/validators';
@@ -27,35 +29,87 @@ const DEFAULT = {
   name: '',
   packageName: '',
   versionName: '1.0.0',
+  versionCodeOverride: '',
   source: { type: 'url', url: '' },
-  colors: { primary: '#4f46e5', statusBar: '#3730a3', splashBg: '#ffffff' },
+  colors: { primary: '#4f46e5', statusBar: '#3730a3', accent: '#06b6d4', splashBg: '#ffffff' },
+  splash: { durationMs: 0 },
+  progress: { style: 'bar' },
   orientation: 'unspecified',
+  exitText: 'Keluar dari aplikasi?',
   features: {
-    pullToRefresh: true, fileUpload: true, downloads: true, externalLinksInBrowser: true,
-    offlinePage: true, geolocation: false, camera: false, zoom: false, keepAwake: false,
-    fullscreen: false, sideMenu: false, admob: false, onesignal: false, cacheMode: 'default', encrypt: true
+    pullToRefresh: true, fileUpload: true, downloads: true, externalLinksInBrowser: true, offlinePage: true,
+    geolocation: false, camera: false, microphone: false, vibrate: false,
+    zoom: false, zoomButtons: false, scrollbars: true, textSelection: true, saveFormData: true,
+    keepAwake: false, fullscreen: false, disallowScreenshot: false, confirmExit: false, popupBlocker: false,
+    deepLinking: false, httpsOnly: true, allowFileAccess: false, crossOrigin: false,
+    showToolbar: false, liveTitle: false, homeButton: false, sideMenu: false,
+    hideWebViewUA: false, hideMobileUA: false, desktopMode: false,
+    admob: false, interstitial: false, onesignal: false, tawk: false, jsApi: false, supabase: false,
+    remoteUpdate: false, encrypt: true, cacheMode: 'default'
   },
   sideMenu: { about: '', contactEmail: '', shareText: '', links: [] },
-  admob: { appId: '', bannerId: '' },
+  admob: { appId: '', bannerId: '', interstitialId: '', interstitialEvery: 4 },
   onesignal: { appId: '' },
+  tawk: { propertyId: '', widgetId: 'default' },
+  supabase: { url: '', anonKey: '' },
   userAgentSuffix: ''
 };
 
-const FEATURES = [
-  ['pullToRefresh', 'Tarik untuk refresh'],
-  ['fileUpload', 'Upload file dari form'],
-  ['downloads', 'Dukungan download file'],
-  ['externalLinksInBrowser', 'Link luar dibuka di browser'],
-  ['offlinePage', 'Halaman offline yang rapi'],
-  ['geolocation', 'Izin lokasi (GPS)'],
-  ['camera', 'Izin kamera & mikrofon'],
-  ['zoom', 'Izinkan pinch zoom'],
-  ['keepAwake', 'Layar tetap menyala'],
-  ['fullscreen', 'Layar penuh (sembunyikan status bar)']
+// [kunci, label, penjelasan, hanya untuk (url|local)?]
+const GROUPS = [
+  ['Navigasi & tampilan', [
+    ['pullToRefresh', 'Tarik untuk refresh'],
+    ['fullscreen', 'Layar penuh', 'Sembunyikan status bar & navigasi sistem'],
+    ['keepAwake', 'Layar tetap menyala'],
+    ['scrollbars', 'Scrollbar samping'],
+    ['zoom', 'Pinch zoom'],
+    ['zoomButtons', 'Tombol zoom (+/−)'],
+    ['textSelection', 'Izinkan seleksi teks', 'Matikan agar konten tidak mudah disalin'],
+    ['confirmExit', 'Konfirmasi saat keluar']
+  ]],
+  ['Link & jendela', [
+    ['externalLinksInBrowser', 'Link domain lain dibuka di browser'],
+    ['popupBlocker', 'Blokir pop-up', 'Bila mati, window.open/target=_blank dibuka di dalam aplikasi'],
+    ['deepLinking', 'Deep linking', 'Link ke domain situs Anda di HP dibuka langsung di aplikasi', 'url'],
+    ['downloads', 'Unduh file (Download Manager)'],
+    ['fileUpload', 'Upload file dari form']
+  ]],
+  ['Keamanan & data', [
+    ['httpsOnly', 'Hanya konten HTTPS', 'Matikan untuk situs http:// atau konten campuran'],
+    ['disallowScreenshot', 'Larang screenshot & rekam layar'],
+    ['saveFormData', 'Simpan isian formulir (autofill)'],
+    ['offlinePage', 'Halaman error/offline'],
+    ['allowFileAccess', 'Izinkan akses file', 'file:// dan content:// di WebView'],
+    ['crossOrigin', 'Izinkan cross-origin (konten lokal)', 'Permintaan GET ke API luar dari aplikasi ZIP/HTML tanpa CORS', 'local'],
+    ['encrypt', 'Enkripsi konten di APK (AES-GCM)', 'Mempersulit penyalinan HTML/JS', 'local']
+  ]]
+];
+const PERMS = [
+  ['camera', 'Kamera'], ['microphone', 'Mikrofon'], ['geolocation', 'Lokasi (GPS)'], ['vibrate', 'Getar']
 ];
 
 const MAX_ZIP_MB = 50;
 const MAX_HTML_KB = 500;
+
+function Toggle({ k, label, hint, f, set }) {
+  return (
+    <FormControlLabel
+      control={<Switch checked={!!f[k]} onChange={(e) => set(`features.${k}`, e.target.checked)} />}
+      label={<Stack direction="row" alignItems="center" spacing={0.5}><span>{label}</span>{hint && <Tooltip title={hint}><HelpOutlineIcon sx={{ fontSize: 16, color: 'text.secondary' }} /></Tooltip>}</Stack>}
+    />
+  );
+}
+
+function Section({ title, children, defaultExpanded = false, chip }) {
+  return (
+    <Accordion defaultExpanded={defaultExpanded} disableGutters sx={{ mb: 1.5, border: 1, borderColor: 'divider', '&:before': { display: 'none' }, borderRadius: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography fontWeight={700}>{title}</Typography>{chip && <Chip size="small" label={chip} sx={{ ml: 1 }} />}
+      </AccordionSummary>
+      <AccordionDetails>{children}</AccordionDetails>
+    </Accordion>
+  );
+}
 
 export default function Create() {
   const { appId } = useParams();
@@ -63,7 +117,7 @@ export default function Create() {
   const { user, isAnon, loading: authLoading, ensureUser } = useAuth();
   const nav = useNavigate();
   const [cfg, setCfg] = useState(() => ({
-    ...DEFAULT,
+    ...structuredClone(DEFAULT),
     name: qs.get('name') || '',
     source: { type: qs.get('type') || 'url', url: qs.get('url') || '' }
   }));
@@ -74,24 +128,31 @@ export default function Create() {
   const [iconFile, setIconFile] = useState(null);
   const [iconPreview, setIconPreview] = useState('');
   const [existingIconId, setExistingIconId] = useState('');
+  const [splashMode, setSplashMode] = useState('icon');
+  const [splashFile, setSplashFile] = useState(null);
+  const [splashPreview, setSplashPreview] = useState('');
+  const [errorMode, setErrorMode] = useState('default');
+  const [errorHtml, setErrorHtml] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ label: '', value: 0 });
   const [error, setError] = useState('');
   const genCanvas = useRef(null);
 
-  // Mode edit butuh akun
   useEffect(() => {
     if (appId && !authLoading && !user) nav(`/login?next=/create/${appId}`, { replace: true });
   }, [appId, authLoading, user, nav]);
 
-  // Prefill dari template (?template=id) atau AI Studio (?from=ai)
+  // Prefill: template, AI Studio, atau Media App Maker (ZIP)
   useEffect(() => {
     if (appId) return;
-    const tid = qs.get('template');
+    const from = qs.get('from');
     let pre = null;
+    const tid = qs.get('template');
     if (tid) pre = TEMPLATES.find((t) => t.id === tid);
-    if (qs.get('from') === 'ai') {
-      try { pre = JSON.parse(sessionStorage.getItem('apkify:ai') || 'null'); } catch { /* */ }
+    if (from === 'ai') { try { pre = JSON.parse(sessionStorage.getItem('apkify:ai') || 'null'); } catch { /* */ } }
+    if (from === 'handoff') {
+      const h = takeHandoff();
+      if (h?.zip) { pre = { appName: h.name, source: 'zip', color: h.color }; setZipFile(h.zip); }
     }
     if (!pre) return;
     setCfg((c) => ({
@@ -106,15 +167,24 @@ export default function Create() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mode edit: muat konfigurasi app yang sudah ada (1x baca RTDB)
+  // Mode edit: muat konfigurasi app (1x baca RTDB)
   useEffect(() => {
     if (!appId || !user) return;
     get(ref(db, `apps/${user.uid}/${appId}`)).then((s) => {
       const a = s.val();
       if (!a?.config) return;
-      setCfg({ ...DEFAULT, ...a.config, features: { ...DEFAULT.features, ...a.config.features }, sideMenu: { ...DEFAULT.sideMenu, ...a.config.sideMenu } });
+      const c = a.config;
+      setCfg({
+        ...structuredClone(DEFAULT), ...c, versionCodeOverride: '',
+        colors: { ...DEFAULT.colors, ...c.colors }, features: { ...DEFAULT.features, ...c.features },
+        sideMenu: { ...DEFAULT.sideMenu, ...c.sideMenu }, admob: { ...DEFAULT.admob, ...c.admob },
+        tawk: { ...DEFAULT.tawk, ...c.tawk }, supabase: { ...DEFAULT.supabase, ...c.supabase },
+        splash: { ...DEFAULT.splash, ...c.splash }, progress: { ...DEFAULT.progress, ...c.progress }
+      });
       setPkgTouched(true);
-      if (a.config.iconFileId) { setExistingIconId(a.config.iconFileId); setIconMode('keep'); }
+      if (c.iconFileId) { setExistingIconId(c.iconFileId); setIconMode('keep'); }
+      if (c.splash?.fileId) setSplashMode('keep');
+      if (c.errorPageFileId) setErrorMode('keep');
     });
   }, [appId, user]);
 
@@ -122,29 +192,32 @@ export default function Create() {
     const n = structuredClone(c);
     const keys = path.split('.');
     let o = n;
-    keys.slice(0, -1).forEach((k) => { o = o[k]; });
+    keys.slice(0, -1).forEach((k) => { o = o[k] ??= {}; });
     o[keys.at(-1)] = value;
     return n;
   });
 
-  // Saran package name otomatis
   useEffect(() => {
     if (!pkgTouched) set('packageName', suggestPackage(cfg.name, cfg.source.type === 'url' ? normalizeUrl(cfg.source.url) : ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cfg.name, cfg.source.url, cfg.source.type, pkgTouched]);
 
-  // Pratinjau ikon
   useEffect(() => {
     if (iconMode === 'generate') {
       const c = generateLetterIcon({ text: cfg.name || 'A', bg1: cfg.colors.primary, bg2: cfg.colors.statusBar, size: 512, radius: 0 });
       genCanvas.current = c;
       setIconPreview(c.toDataURL('image/png'));
-    } else if (iconMode === 'upload' && iconFile) {
-      fileToDataUrl(iconFile).then(setIconPreview);
-    } else if (iconMode === 'keep') {
-      setIconPreview('');
-    }
+    } else if (iconMode === 'upload' && iconFile) fileToDataUrl(iconFile).then(setIconPreview);
+    else if (iconMode === 'keep') setIconPreview('');
   }, [iconMode, iconFile, cfg.name, cfg.colors.primary, cfg.colors.statusBar]);
+
+  useEffect(() => {
+    if (splashMode === 'custom' && splashFile) fileToDataUrl(splashFile).then(setSplashPreview);
+    else setSplashPreview('');
+  }, [splashMode, splashFile]);
+
+  const isLocal = cfg.source.type !== 'url';
+  const f = cfg.features;
 
   const errors = useMemo(() => {
     const e = {};
@@ -153,29 +226,44 @@ export default function Create() {
     const pe = validatePackage(cfg.packageName);
     if (pe) e.packageName = pe;
     if (!/^\d+(\.\d+){0,3}$/.test(cfg.versionName)) e.versionName = 'Contoh: 1.0.0';
-    if (cfg.source.type === 'url') { const ue = validateUrl(cfg.source.url); if (ue) e.url = ue; }
+    if (cfg.versionCodeOverride && !/^\d{1,10}$/.test(String(cfg.versionCodeOverride))) e.versionCode = 'Kode versi harus angka';
+    if (cfg.source.type === 'url') {
+      const ue = validateUrl(cfg.source.url);
+      if (ue) e.url = ue;
+      else if (f.httpsOnly && /^http:\/\//i.test(cfg.source.url.trim())) e.url = 'Alamat http:// butuh opsi “Hanya konten HTTPS” dimatikan';
+    }
     if (cfg.source.type === 'zip' && !zipFile && !cfg.source.fileId) e.zip = 'Pilih file ZIP';
     if (cfg.source.type === 'html' && !html.trim() && !cfg.source.fileId) e.html = 'Tempel kode HTML';
     if (Object.values(cfg.colors).some((c) => !isHex(c))) e.colors = 'Warna tidak valid';
-    if (cfg.features.admob && !/^ca-app-pub-\d+~\d+$/.test(cfg.admob.appId)) e.admob = 'AdMob App ID: ca-app-pub-xxx~yyy';
-    if (cfg.features.onesignal && !/^[0-9a-f-]{36}$/i.test(cfg.onesignal.appId)) e.onesignal = 'OneSignal App ID (UUID)';
+    if ((f.admob || f.interstitial) && !/^ca-app-pub-\d+~\d+$/.test(cfg.admob.appId)) e.admob = 'AdMob App ID: ca-app-pub-xxx~yyy';
+    if (f.interstitial && !/^ca-app-pub-\d+\/\d+$/.test(cfg.admob.interstitialId)) e.interstitial = 'Interstitial Ad Unit ID: ca-app-pub-xxx/yyy';
+    if (f.onesignal && !/^[0-9a-f-]{36}$/i.test(cfg.onesignal.appId)) e.onesignal = 'OneSignal App ID (UUID)';
+    if (f.tawk && !cfg.tawk.propertyId.trim()) e.tawk = 'Tawk Property ID wajib diisi';
+    if (f.supabase && (!/\.supabase\.co\/?$/.test(cfg.supabase.url) || cfg.supabase.anonKey.length < 20)) e.supabase = 'URL (https://xxx.supabase.co) & anon key Supabase';
     if (iconMode === 'upload' && !iconFile) e.icon = 'Pilih gambar ikon';
+    if (splashMode === 'custom' && !splashFile) e.splash = 'Pilih gambar splash';
+    if (errorMode === 'custom' && !errorHtml.trim()) e.errorPage = 'Isi HTML halaman error';
     return e;
-  }, [cfg, zipFile, html, iconMode, iconFile]);
+  }, [cfg, f, zipFile, html, iconMode, iconFile, splashMode, splashFile, errorMode, errorHtml]);
 
-  async function prepareIcon() {
-    if (iconMode === 'keep' && existingIconId) return existingIconId;
-    let canvas;
-    if (iconMode === 'generate') canvas = genCanvas.current;
-    else {
-      const img = await loadImage(await fileToDataUrl(iconFile));
-      if (img.width < 192 || img.height < 192) throw new Error('Ikon minimal 192×192 px (disarankan 512×512).');
-      canvas = drawSquare(img, 512);
+  async function uploadPng(canvasOrFile, kind) {
+    let canvas = canvasOrFile;
+    if (canvasOrFile instanceof File) {
+      const img = await loadImage(await fileToDataUrl(canvasOrFile));
+      if (kind === 'icon' && (img.width < 192 || img.height < 192)) throw new Error('Ikon minimal 192×192 px (disarankan 512×512).');
+      canvas = kind === 'icon' ? drawSquare(img, 512) : (() => {
+        const c = document.createElement('canvas');
+        const s = Math.min(1024, Math.max(img.width, img.height));
+        c.width = c.height = s;
+        const k = s / Math.max(img.width, img.height);
+        c.getContext('2d').drawImage(img, (s - img.width * k) / 2, (s - img.height * k) / 2, img.width * k, img.height * k);
+        return c;
+      })();
     }
     const blob = await canvasToBlob(canvas);
-    const f = new File([blob], 'icon.png', { type: 'image/png' });
-    setProgress({ label: 'Mengunggah ikon…', value: 0 });
-    const r = await api.upload('/api/uploads', f, { kind: 'icon', onProgress: (v) => setProgress({ label: 'Mengunggah ikon…', value: v }) });
+    const label = kind === 'icon' ? 'Mengunggah ikon…' : 'Mengunggah splash…';
+    setProgress({ label, value: 0 });
+    const r = await api.upload('/api/uploads', new File([blob], `${kind}.png`, { type: 'image/png' }), { kind, onProgress: (v) => setProgress({ label, value: v }) });
     return r.fileId;
   }
 
@@ -184,13 +272,18 @@ export default function Create() {
     if (Object.keys(errors).length) { setError(Object.values(errors)[0]); return; }
     setBusy(true);
     try {
-      const u = await ensureUser(); // tanpa login -> sesi tamu otomatis
-      const iconFileId = await prepareIcon();
+      const u = await ensureUser();
+      const iconFileId = iconMode === 'keep' && existingIconId ? existingIconId
+        : await uploadPng(iconMode === 'generate' ? genCanvas.current : iconFile, 'icon');
+      const splash = { durationMs: cfg.splash.durationMs };
+      if (splashMode === 'custom') splash.fileId = await uploadPng(splashFile, 'splash');
+      if (splashMode === 'keep') splash.fileId = cfg.splash.fileId;
+
       const source = { type: cfg.source.type };
-      if (source.type === 'url') source.url = normalizeUrl(cfg.source.url);
+      if (source.type === 'url') source.url = /^https?:\/\//i.test(cfg.source.url.trim()) ? cfg.source.url.trim() : normalizeUrl(cfg.source.url);
       if (source.type === 'zip') {
         if (zipFile) {
-          if (zipFile.size > MAX_ZIP_MB * 1024 * 1024) throw new Error(`ZIP maksimal ${MAX_ZIP_MB} MB`);
+          if (zipFile.size > MAX_ZIP_MB * 1048576) throw new Error(`ZIP maksimal ${MAX_ZIP_MB} MB`);
           const r = await api.upload('/api/uploads', zipFile, { kind: 'zip', onProgress: (v) => setProgress({ label: 'Mengunggah ZIP…', value: v }) });
           source.fileId = r.fileId;
         } else source.fileId = cfg.source.fileId;
@@ -202,8 +295,13 @@ export default function Create() {
         } else source.fileId = cfg.source.fileId;
       }
       setProgress({ label: 'Mengirim ke antrean build…', value: 100 });
-      const body = { appId: appId || null, config: { ...cfg, source, iconFileId } };
-      const res = await api.post('/api/builds', body);
+      const config = {
+        ...cfg, source, iconFileId, splash,
+        versionCodeOverride: cfg.versionCodeOverride ? Number(cfg.versionCodeOverride) : null,
+        errorPageFileId: errorMode === 'keep' ? cfg.errorPageFileId : '',
+        ...(errorMode === 'custom' ? { errorPageHtml: errorHtml } : {})
+      };
+      const res = await api.post('/api/builds', { appId: appId || null, config });
       clearCache(`apps:${u.uid}`);
       nav(`/build/${res.buildId}`);
     } catch (e) {
@@ -213,184 +311,260 @@ export default function Create() {
     }
   }
 
-  const f = cfg.features;
+  const splashImg = splashMode === 'custom' ? splashPreview : iconPreview;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>{appId ? 'Perbarui aplikasi' : 'Buat aplikasi Android'}</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Isi data di bawah, lalu klik Build. Hasilnya APK (untuk dipasang langsung) dan AAB (untuk Google Play).</Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>Isi data di bawah, lalu klik Build. Hasilnya APK (dipasang langsung) dan AAB (Google Play). Bagian lanjutan opsional — nilai bawaan sudah aman.</Typography>
       {(!user || isAnon) && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Anda bisa build tanpa akun (mode tamu, batas build lebih kecil). <b>Daftar gratis</b> agar aplikasi, riwayat, dan keystore tersimpan permanen serta mendapat email saat build selesai.
+          Anda bisa build tanpa akun (mode tamu, batas lebih kecil). <b>Daftar gratis</b> agar aplikasi, riwayat, dan keystore tersimpan permanen serta mendapat email saat build selesai.
         </Alert>
       )}
 
       {/* 1. SUMBER */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>1. Sumber konten</Typography>
-          <Tabs value={cfg.source.type} onChange={(_, v) => set('source.type', v)} sx={{ mb: 2 }} variant="fullWidth">
-            <Tab value="url" icon={<LanguageIcon />} iconPosition="start" label="Website" />
-            <Tab value="zip" icon={<FolderZipIcon />} iconPosition="start" label="ZIP" />
-            <Tab value="html" icon={<CodeIcon />} iconPosition="start" label="HTML" />
-          </Tabs>
-          {cfg.source.type === 'url' && (
-            <TextField label="Alamat website" placeholder="https://tokoanda.com" value={cfg.source.url}
-              onChange={(e) => set('source.url', e.target.value)} error={!!cfg.source.url && !!errors.url} helperText={(cfg.source.url && errors.url) || 'Website harus HTTPS dan bisa dibuka di HP.'} />
-          )}
-          {cfg.source.type === 'zip' && (
-            <>
-              <FileDrop accept=".zip,application/zip" file={zipFile} onFile={setZipFile}
-                hint={`ZIP berisi index.html di root (mis. folder dist dari React/Vite). Maks ${MAX_ZIP_MB} MB.`} />
-              {cfg.source.fileId && !zipFile && <Alert severity="info" sx={{ mt: 1 }}>ZIP sebelumnya akan dipakai lagi bila tidak memilih file baru.</Alert>}
-            </>
-          )}
-          {cfg.source.type !== 'url' && (
-            <FormControlLabel sx={{ mt: 1 }} control={<Switch checked={!!f.encrypt} onChange={(e) => set('features.encrypt', e.target.checked)} />}
-              label="Enkripsi konten di dalam APK (AES-GCM) — mempersulit penyalinan kode" />
-          )}
-          {cfg.source.type === 'html' && (
-            <TextField multiline minRows={8} maxRows={20} label="Kode HTML" value={html} onChange={(e) => setHtml(e.target.value)}
-              placeholder="<!doctype html><html>…</html>" helperText={`Satu halaman HTML (CSS/JS inline). Maks ${MAX_HTML_KB} KB.`}
-              InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }} />
-          )}
-        </CardContent>
-      </Card>
+      <Card sx={{ mb: 2 }}><CardContent>
+        <Typography variant="h6" gutterBottom>1. Sumber konten</Typography>
+        <Tabs value={cfg.source.type} onChange={(_, v) => set('source.type', v)} sx={{ mb: 2 }} variant="fullWidth">
+          <Tab value="url" icon={<LanguageIcon />} iconPosition="start" label="Website" />
+          <Tab value="zip" icon={<FolderZipIcon />} iconPosition="start" label="ZIP" />
+          <Tab value="html" icon={<CodeIcon />} iconPosition="start" label="HTML" />
+        </Tabs>
+        {cfg.source.type === 'url' && (
+          <TextField label="Alamat website" placeholder="https://tokoanda.com" value={cfg.source.url}
+            onChange={(e) => set('source.url', e.target.value)} error={!!cfg.source.url && !!errors.url}
+            helperText={(cfg.source.url && errors.url) || 'Situs harus bisa dibuka di HP. Konten aplikasi selalu mengikuti situs Anda.'} />
+        )}
+        {cfg.source.type === 'zip' && <>
+          <FileDrop accept=".zip,application/zip" file={zipFile} onFile={setZipFile} hint={`ZIP berisi index.html di root (mis. folder dist React/Vite). Maks ${MAX_ZIP_MB} MB.`} />
+          {cfg.source.fileId && !zipFile && <Alert severity="info" sx={{ mt: 1 }}>ZIP sebelumnya dipakai lagi bila tidak memilih file baru.</Alert>}
+          <Typography variant="body2" sx={{ mt: 1 }}>Punya foto, musik, video, atau PDF? Pakai <Link component={RouterLink} to="/media-app">Media App Maker</Link>.</Typography>
+        </>}
+        {cfg.source.type === 'html' && (
+          <TextField multiline minRows={8} maxRows={20} label="Kode HTML" value={html} onChange={(e) => setHtml(e.target.value)}
+            placeholder="<!doctype html><html>…</html>" helperText={`Satu halaman HTML (CSS/JS inline). Maks ${MAX_HTML_KB} KB.`}
+            InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }} />
+        )}
+      </CardContent></Card>
 
       {/* 2. IDENTITAS */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>2. Identitas aplikasi</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Nama aplikasi" value={cfg.name} onChange={(e) => set('name', e.target.value)} error={!!cfg.name && !!errors.name} helperText={errors.name || 'Tampil di bawah ikon HP'} />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField label="Versi" value={cfg.versionName} onChange={(e) => set('versionName', e.target.value)} error={!!errors.versionName} helperText={errors.versionName || 'Kode versi dinaikkan otomatis tiap build'} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Package name" value={cfg.packageName} disabled={!!appId}
-                onChange={(e) => { setPkgTouched(true); set('packageName', e.target.value.toLowerCase()); }}
-                error={!!errors.packageName} helperText={errors.packageName || (appId ? 'Package name tidak bisa diubah agar update terpasang di atas versi lama.' : 'ID unik di Play Store. Tidak bisa diubah setelah publish.')} />
-            </Grid>
+      <Card sx={{ mb: 2 }}><CardContent>
+        <Typography variant="h6" gutterBottom>2. Identitas aplikasi</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <TextField label="Nama aplikasi" value={cfg.name} onChange={(e) => set('name', e.target.value)} error={!!cfg.name && !!errors.name} helperText={errors.name || 'Tampil di bawah ikon HP'} />
           </Grid>
-        </CardContent>
-      </Card>
+          <Grid item xs={6} sm={3}>
+            <TextField label="Versi" value={cfg.versionName} onChange={(e) => set('versionName', e.target.value)} error={!!errors.versionName} helperText={errors.versionName || 'mis. 1.0.0'} />
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <TextField label="Kode versi" value={cfg.versionCodeOverride} onChange={(e) => set('versionCodeOverride', e.target.value.replace(/\D/g, ''))}
+              error={!!errors.versionCode} helperText={errors.versionCode || 'Kosong = otomatis +1'} />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField label="Package name" value={cfg.packageName} disabled={!!appId}
+              onChange={(e) => { setPkgTouched(true); set('packageName', e.target.value.toLowerCase()); }}
+              error={!!errors.packageName} helperText={errors.packageName || (appId ? 'Tidak bisa diubah agar update terpasang di atas versi lama.' : 'ID unik di Play Store, tidak bisa diubah setelah terbit.')} />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField select label="Orientasi layar" value={cfg.orientation} onChange={(e) => set('orientation', e.target.value)}>
+              <MenuItem value="unspecified">Rotasi otomatis</MenuItem><MenuItem value="portrait">Potret</MenuItem><MenuItem value="landscape">Lanskap</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField select label="Mode cache" value={f.cacheMode} onChange={(e) => set('features.cacheMode', e.target.value)}>
+              <MenuItem value="noCache">Tanpa cache (selalu terbaru)</MenuItem>
+              <MenuItem value="default">Cache standar</MenuItem>
+              <MenuItem value="cacheElseNetwork">Cache tinggi (paling cepat & hemat kuota)</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Penandatanganan: keystore dibuat otomatis per package. Punya keystore sendiri? Unggah dari <Link component={RouterLink} to="/dashboard">Studio</Link> → ikon kunci (butuh akun).
+        </Typography>
+      </CardContent></Card>
 
-      {/* 3. TAMPILAN */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>3. Ikon, splash & warna</Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems="flex-start">
-            <Box sx={{ textAlign: 'center' }}>
-              <Avatar variant="rounded" src={iconPreview} sx={{ width: 96, height: 96, borderRadius: 4, mb: 1 }}>
-                {iconMode === 'keep' ? 'Ikon lama' : ''}
-              </Avatar>
-              <Typography variant="caption" color="text.secondary">Pratinjau</Typography>
+      {/* 3. IKON, SPLASH, WARNA */}
+      <Card sx={{ mb: 2 }}><CardContent>
+        <Typography variant="h6" gutterBottom>3. Ikon, splash & warna</Typography>
+        <Grid container spacing={3}>
+          <Grid item xs={12} sm={7}>
+            <Typography fontWeight={600} gutterBottom>Ikon</Typography>
+            <ToggleButtonGroup exclusive size="small" value={iconMode} onChange={(_, v) => v && setIconMode(v)} sx={{ mb: 1 }}>
+              <ToggleButton value="generate">Buat otomatis</ToggleButton>
+              <ToggleButton value="upload">Upload</ToggleButton>
+              {existingIconId && <ToggleButton value="keep">Ikon lama</ToggleButton>}
+            </ToggleButtonGroup>
+            {iconMode === 'upload' && <FileDrop accept="image/png,image/jpeg,image/webp" file={iconFile} onFile={setIconFile} hint="PNG/JPG persegi, ideal 512×512" />}
+
+            <Typography fontWeight={600} sx={{ mt: 2 }} gutterBottom>Splash screen</Typography>
+            <ToggleButtonGroup exclusive size="small" value={splashMode} onChange={(_, v) => v && setSplashMode(v)} sx={{ mb: 1 }}>
+              <ToggleButton value="icon">Pakai ikon</ToggleButton>
+              <ToggleButton value="custom">Gambar sendiri</ToggleButton>
+              {cfg.splash.fileId && <ToggleButton value="keep">Splash lama</ToggleButton>}
+            </ToggleButtonGroup>
+            {splashMode === 'custom' && <FileDrop accept="image/png,image/jpeg,image/webp" file={splashFile} onFile={setSplashFile} hint="Logo PNG transparan disarankan (ditampilkan dalam lingkaran)" />}
+            <Typography variant="body2" sx={{ mt: 1 }}>Durasi minimum: {cfg.splash.durationMs ? `${cfg.splash.durationMs} ms` : 'Bawaan sistem'}</Typography>
+            <Slider value={cfg.splash.durationMs} min={0} max={5000} step={250} onChange={(_, v) => set('splash.durationMs', v)} />
+          </Grid>
+          <Grid item xs={12} sm={5}>
+            {/* Pratinjau splash */}
+            <Box sx={{ mx: 'auto', width: 180, height: 340, border: '6px solid #111', borderRadius: 4, bgcolor: cfg.colors.splashBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
+              <Avatar src={splashImg} sx={{ width: 96, height: 96, bgcolor: cfg.colors.primary }}>{iconMode === 'keep' && !splashImg ? '' : (cfg.name || 'A')[0]}</Avatar>
+              <Typography variant="caption" sx={{ color: isHex(cfg.colors.splashBg) && parseInt(cfg.colors.splashBg.slice(1), 16) > 0x888888 ? '#333' : '#eee' }}>{cfg.name || 'Nama Aplikasi'}</Typography>
             </Box>
-            <Box sx={{ flex: 1, width: '100%' }}>
-              <ToggleButtonGroup exclusive size="small" value={iconMode} onChange={(_, v) => v && setIconMode(v)} sx={{ mb: 2 }}>
-                <ToggleButton value="generate">Buat otomatis</ToggleButton>
-                <ToggleButton value="upload">Upload sendiri</ToggleButton>
-                {existingIconId && <ToggleButton value="keep">Pakai ikon lama</ToggleButton>}
-              </ToggleButtonGroup>
-              {iconMode === 'upload' && <FileDrop accept="image/png,image/jpeg,image/webp" file={iconFile} onFile={setIconFile} hint="PNG/JPG persegi, ideal 512×512 px" />}
-              {iconMode === 'generate' && <Typography variant="body2" color="text.secondary">Ikon dibuat dari huruf awal nama aplikasi dan warna utama.</Typography>}
-            </Box>
+            <Typography variant="caption" display="block" textAlign="center" color="text.secondary">Pratinjau splash</Typography>
+          </Grid>
+        </Grid>
+        <Divider sx={{ my: 2 }} />
+        <Typography fontWeight={600} gutterBottom>Skema warna Material</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={6} sm={3}><ColorField label="Utama" value={cfg.colors.primary} onChange={(v) => set('colors.primary', v)} /></Grid>
+          <Grid item xs={6} sm={3}><ColorField label="Status bar (gelap)" value={cfg.colors.statusBar} onChange={(v) => set('colors.statusBar', v)} /></Grid>
+          <Grid item xs={6} sm={3}><ColorField label="Aksen" value={cfg.colors.accent} onChange={(v) => set('colors.accent', v)} /></Grid>
+          <Grid item xs={6} sm={3}><ColorField label="Latar splash" value={cfg.colors.splashBg} onChange={(v) => set('colors.splashBg', v)} /></Grid>
+        </Grid>
+        <Stack direction="row" sx={{ mt: 1, borderRadius: 1, overflow: 'hidden', height: 16 }}>
+          {[cfg.colors.statusBar, cfg.colors.primary, cfg.colors.accent].map((c, i) => <Box key={i} sx={{ flex: 1, bgcolor: isHex(c) ? c : '#ccc' }} />)}
+        </Stack>
+        <TextField select label="Indikator loading" value={cfg.progress.style} onChange={(e) => set('progress.style', e.target.value)} sx={{ mt: 2 }}>
+          <MenuItem value="bar">Garis di atas</MenuItem><MenuItem value="spinner">Lingkaran di tengah</MenuItem><MenuItem value="none">Tanpa indikator</MenuItem>
+        </TextField>
+      </CardContent></Card>
+
+      {/* 4. LANJUTAN */}
+      <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>4. Pengaturan lanjutan</Typography>
+
+      <Section title="Toolbar & menu samping">
+        <Grid container>
+          <Grid item xs={12} sm={4}><Toggle k="showToolbar" label="Tampilkan toolbar (judul)" f={f} set={set} /></Grid>
+          <Grid item xs={12} sm={4}><Toggle k="liveTitle" label="Judul mengikuti halaman" f={f} set={set} /></Grid>
+          <Grid item xs={12} sm={4}><Toggle k="homeButton" label="Tombol Home" f={f} set={set} /></Grid>
+        </Grid>
+        <Toggle k="sideMenu" label="Menu samping (navigation drawer)" f={f} set={set} />
+        {f.sideMenu && (
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Teks dialog Tentang" multiline minRows={2} value={cfg.sideMenu.about} onChange={(e) => set('sideMenu.about', e.target.value)} />
+            <TextField label="Email kontak" value={cfg.sideMenu.contactEmail} onChange={(e) => set('sideMenu.contactEmail', e.target.value)} />
+            <TextField label="Teks bagikan aplikasi" value={cfg.sideMenu.shareText} onChange={(e) => set('sideMenu.shareText', e.target.value)} placeholder="Coba aplikasi ini!" />
+            {cfg.sideMenu.links.map((l, i) => (
+              <Stack direction="row" spacing={1} key={i}>
+                <TextField label="Label" value={l.label} onChange={(e) => { const L = [...cfg.sideMenu.links]; L[i] = { ...l, label: e.target.value }; set('sideMenu.links', L); }} />
+                <TextField label="URL" value={l.url} onChange={(e) => { const L = [...cfg.sideMenu.links]; L[i] = { ...l, url: e.target.value }; set('sideMenu.links', L); }} />
+                <IconButton onClick={() => set('sideMenu.links', cfg.sideMenu.links.filter((_, j) => j !== i))}><DeleteIcon /></IconButton>
+              </Stack>
+            ))}
+            {cfg.sideMenu.links.length < 8 && <Button startIcon={<AddIcon />} onClick={() => set('sideMenu.links', [...cfg.sideMenu.links, { label: '', url: '' }])}>Tambah link</Button>}
           </Stack>
-          <Divider sx={{ my: 2 }} />
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}><ColorField label="Warna utama" value={cfg.colors.primary} onChange={(v) => set('colors.primary', v)} /></Grid>
-            <Grid item xs={12} sm={4}><ColorField label="Warna status bar" value={cfg.colors.statusBar} onChange={(v) => set('colors.statusBar', v)} /></Grid>
-            <Grid item xs={12} sm={4}><ColorField label="Latar splash" value={cfg.colors.splashBg} onChange={(v) => set('colors.splashBg', v)} /></Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField select label="Orientasi layar" value={cfg.orientation} onChange={(e) => set('orientation', e.target.value)}>
-                <MenuItem value="unspecified">Otomatis</MenuItem>
-                <MenuItem value="portrait">Potret</MenuItem>
-                <MenuItem value="landscape">Lanskap</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField select label="Mode cache WebView" value={f.cacheMode} onChange={(e) => set('features.cacheMode', e.target.value)}
-                helperText="‘Utamakan cache’ = lebih cepat & hemat kuota, konten bisa sedikit tertinggal">
-                <MenuItem value="default">Standar (ikuti header server)</MenuItem>
-                <MenuItem value="cacheElseNetwork">Utamakan cache</MenuItem>
-                <MenuItem value="noCache">Selalu ambil terbaru</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+        )}
+      </Section>
 
-      {/* 4. FITUR */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>4. Fitur</Typography>
+      {GROUPS.map(([title, items]) => (
+        <Section key={title} title={title}>
           <Grid container>
-            {FEATURES.map(([k, label]) => (
-              <Grid item xs={12} sm={6} key={k}>
-                <FormControlLabel control={<Switch checked={!!f[k]} onChange={(e) => set(`features.${k}`, e.target.checked)} />} label={label} />
-              </Grid>
+            {items.filter(([, , , only]) => !only || (only === 'url' ? !isLocal : isLocal)).map(([k, label, hint]) => (
+              <Grid item xs={12} sm={6} key={k}><Toggle k={k} label={label} hint={hint} f={f} set={set} /></Grid>
             ))}
           </Grid>
+          {title === 'Navigasi & tampilan' && f.confirmExit && (
+            <TextField sx={{ mt: 1 }} label="Teks konfirmasi keluar" value={cfg.exitText} onChange={(e) => set('exitText', e.target.value.slice(0, 120))} />
+          )}
+          {title === 'Keamanan & data' && f.offlinePage && (
+            <Box sx={{ mt: 1 }}>
+              <ToggleButtonGroup exclusive size="small" value={errorMode} onChange={(_, v) => v && setErrorMode(v)}>
+                <ToggleButton value="default">Halaman error bawaan</ToggleButton>
+                <ToggleButton value="custom">HTML sendiri</ToggleButton>
+                {cfg.errorPageFileId && <ToggleButton value="keep">Halaman lama</ToggleButton>}
+              </ToggleButtonGroup>
+              {errorMode === 'custom' && (
+                <TextField sx={{ mt: 1 }} multiline minRows={5} label="HTML halaman error/offline" value={errorHtml} onChange={(e) => setErrorHtml(e.target.value)}
+                  helperText='Tombol coba lagi: <button onclick="ApkifyBridge.retry()">Coba lagi</button>' InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }} />
+              )}
+            </Box>
+          )}
+        </Section>
+      ))}
 
-          <Accordion disableGutters sx={{ mt: 2 }} expanded={f.sideMenu} onChange={(_, v) => set('features.sideMenu', v)}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <FormControlLabel onClick={(e) => e.stopPropagation()} control={<Switch checked={f.sideMenu} onChange={(e) => set('features.sideMenu', e.target.checked)} />} label="Menu samping (Tentang, Kontak, Bagikan, Link sosial)" />
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                <TextField label="Teks Tentang" multiline minRows={2} value={cfg.sideMenu.about} onChange={(e) => set('sideMenu.about', e.target.value)} />
-                <TextField label="Email kontak" value={cfg.sideMenu.contactEmail} onChange={(e) => set('sideMenu.contactEmail', e.target.value)} />
-                <TextField label="Teks bagikan" value={cfg.sideMenu.shareText} onChange={(e) => set('sideMenu.shareText', e.target.value)} placeholder="Coba aplikasi ini!" />
-                {cfg.sideMenu.links.map((l, i) => (
-                  <Stack direction="row" spacing={1} key={i}>
-                    <TextField label="Label" value={l.label} onChange={(e) => { const L = [...cfg.sideMenu.links]; L[i] = { ...l, label: e.target.value }; set('sideMenu.links', L); }} />
-                    <TextField label="URL" value={l.url} onChange={(e) => { const L = [...cfg.sideMenu.links]; L[i] = { ...l, url: e.target.value }; set('sideMenu.links', L); }} />
-                    <IconButton onClick={() => set('sideMenu.links', cfg.sideMenu.links.filter((_, j) => j !== i))}><DeleteIcon /></IconButton>
-                  </Stack>
-                ))}
-                {cfg.sideMenu.links.length < 8 && (
-                  <Button startIcon={<AddIcon />} onClick={() => set('sideMenu.links', [...cfg.sideMenu.links, { label: '', url: '' }])}>Tambah link</Button>
-                )}
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
+      <Section title="Izin aplikasi">
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Hanya izin yang dicentang yang dimasukkan ke AndroidManifest. Izin diminta saat situs membutuhkannya.</Typography>
+        <Grid container>{PERMS.map(([k, label]) => <Grid item xs={6} sm={3} key={k}><Toggle k={k} label={label} f={f} set={set} /></Grid>)}</Grid>
+      </Section>
 
-          <Accordion disableGutters expanded={f.admob} onChange={(_, v) => set('features.admob', v)}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <FormControlLabel onClick={(e) => e.stopPropagation()} control={<Switch checked={f.admob} onChange={(e) => set('features.admob', e.target.checked)} />} label={<>Iklan AdMob <Chip size="small" label="pendapatan untuk Anda" sx={{ ml: 1 }} /></>} />
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                <TextField label="AdMob App ID" placeholder="ca-app-pub-0000000000000000~0000000000" value={cfg.admob.appId} onChange={(e) => set('admob.appId', e.target.value.trim())} error={!!errors.admob} helperText={errors.admob} />
-                <TextField label="Banner Ad Unit ID" placeholder="ca-app-pub-0000000000000000/0000000000" value={cfg.admob.bannerId} onChange={(e) => set('admob.bannerId', e.target.value.trim())} />
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
+      <Section title="Browser & User-Agent">
+        <Grid container>
+          <Grid item xs={12} sm={4}><Toggle k="hideWebViewUA" label="Sembunyikan UA WebView" hint="Hapus penanda “wv” agar situs menganggapnya Chrome biasa" f={f} set={set} /></Grid>
+          <Grid item xs={12} sm={4}><Toggle k="hideMobileUA" label="Sembunyikan UA Android/Mobile" f={f} set={set} /></Grid>
+          <Grid item xs={12} sm={4}><Toggle k="desktopMode" label="Mode desktop" hint="Memuat versi desktop situs" f={f} set={set} /></Grid>
+        </Grid>
+        <TextField sx={{ mt: 1 }} label="Akhiran User-Agent (opsional)" value={cfg.userAgentSuffix} onChange={(e) => set('userAgentSuffix', e.target.value.slice(0, 40))}
+          helperText="Mis. ApkifyApp — server Anda bisa mendeteksi pengunjung dari aplikasi" />
+      </Section>
 
-          <Accordion disableGutters expanded={f.onesignal} onChange={(_, v) => set('features.onesignal', v)}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <FormControlLabel onClick={(e) => e.stopPropagation()} control={<Switch checked={f.onesignal} onChange={(e) => set('features.onesignal', e.target.checked)} />} label="Push notification (OneSignal)" />
-            </AccordionSummary>
-            <AccordionDetails>
-              <TextField label="OneSignal App ID" value={cfg.onesignal.appId} onChange={(e) => set('onesignal.appId', e.target.value.trim())} error={!!errors.onesignal} helperText={errors.onesignal || 'Dashboard OneSignal > Settings > Keys & IDs'} />
-            </AccordionDetails>
-          </Accordion>
+      <Section title="Monetisasi AdMob" chip="pendapatan untuk Anda">
+        <Grid container>
+          <Grid item xs={12} sm={6}><Toggle k="admob" label="Aktifkan AdMob" f={f} set={set} /></Grid>
+          <Grid item xs={12} sm={6}><Toggle k="interstitial" label="Iklan interstitial (layar penuh)" f={f} set={set} /></Grid>
+        </Grid>
+        {(f.admob || f.interstitial) && (
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="AdMob App ID" placeholder="ca-app-pub-0000000000000000~0000000000" value={cfg.admob.appId} onChange={(e) => set('admob.appId', e.target.value.trim())} error={!!errors.admob} helperText={errors.admob} />
+            <TextField label="Banner Ad Unit ID (opsional)" placeholder="ca-app-pub-0000000000000000/0000000000" value={cfg.admob.bannerId} onChange={(e) => set('admob.bannerId', e.target.value.trim())} />
+            {f.interstitial && <>
+              <TextField label="Interstitial Ad Unit ID" value={cfg.admob.interstitialId} onChange={(e) => set('admob.interstitialId', e.target.value.trim())} error={!!errors.interstitial} helperText={errors.interstitial} />
+              <Typography variant="body2">Tampil setiap {cfg.admob.interstitialEvery} perpindahan halaman (min. jeda 60 detik)</Typography>
+              <Slider value={cfg.admob.interstitialEvery} min={2} max={20} onChange={(_, v) => set('admob.interstitialEvery', v)} />
+            </>}
+          </Stack>
+        )}
+      </Section>
 
-          <TextField sx={{ mt: 2 }} label="Akhiran User-Agent (opsional)" value={cfg.userAgentSuffix} onChange={(e) => set('userAgentSuffix', e.target.value.slice(0, 40))}
-            helperText="Ditambahkan ke User-Agent agar server Anda bisa mendeteksi pengunjung dari aplikasi, mis. ApkifyApp" />
-        </CardContent>
-      </Card>
+      <Section title="Push notification & live chat">
+        <Toggle k="onesignal" label="Push notification (OneSignal)" f={f} set={set} />
+        {f.onesignal && <TextField sx={{ mb: 2 }} label="OneSignal App ID" value={cfg.onesignal.appId} onChange={(e) => set('onesignal.appId', e.target.value.trim())} error={!!errors.onesignal} helperText={errors.onesignal || 'Dashboard OneSignal → Settings → Keys & IDs'} />}
+        <Toggle k="tawk" label="Live chat Tawk.to" f={f} set={set} />
+        {f.tawk && (
+          <Stack direction="row" spacing={2}>
+            <TextField label="Property ID" value={cfg.tawk.propertyId} onChange={(e) => set('tawk.propertyId', e.target.value.trim())} error={!!errors.tawk} helperText={errors.tawk || 'Dari link embed.tawk.to/PROPERTY/WIDGET'} />
+            <TextField label="Widget ID" value={cfg.tawk.widgetId} onChange={(e) => set('tawk.widgetId', e.target.value.trim())} />
+          </Stack>
+        )}
+      </Section>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Section title="Developer: JavaScript API, Supabase, Remote Update">
+        <Toggle k="jsApi" label="JavaScript APIs (plugin native)" f={f} set={set} />
+        {f.jsApi && (
+          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2, fontSize: 12, overflow: 'auto', mt: 0 }}>{`document.addEventListener('apkifyready', () => {
+  Apkify.toast('Halo');          Apkify.vibrate(80);
+  Apkify.share('Teks');          Apkify.copy('Teks');
+  Apkify.open('https://...');    Apkify.keepScreenOn(true);
+  Apkify.device(); Apkify.app(); Apkify.exit();
+});`}</Box>
+        )}
+        <Toggle k="supabase" label="Backend Supabase" f={f} set={set} />
+        {f.supabase && (
+          <Stack spacing={2} sx={{ mb: 1 }}>
+            <TextField label="Project URL" placeholder="https://xxxx.supabase.co" value={cfg.supabase.url} onChange={(e) => set('supabase.url', e.target.value.trim())} error={!!errors.supabase} helperText={errors.supabase} />
+            <TextField label="Anon (public) key" value={cfg.supabase.anonKey} onChange={(e) => set('supabase.anonKey', e.target.value.trim())}
+              helperText="Tersedia di halaman sebagai window.APKIFY.supabaseUrl & supabaseAnonKey. Lindungi data dengan Row Level Security. Jangan pernah memakai service_role key." />
+          </Stack>
+        )}
+        <Toggle k="remoteUpdate" label="Remote Update" f={f} set={set} />
+        {f.remoteUpdate && (
+          <Typography variant="body2" color="text.secondary">
+            Setelah build, kelola dari Studio: kirim pesan ke pengguna, paksa update versi lama{isLocal ? ', dan perbarui konten ZIP/HTML tanpa build ulang (OTA)' : ''}.
+          </Typography>
+        )}
+      </Section>
+
+      {error && <Alert severity="error" sx={{ my: 2 }}>{error}</Alert>}
       {busy && (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ my: 2 }}>
           <Typography variant="body2" gutterBottom>{progress.label}</Typography>
           <LinearProgress variant={progress.value ? 'determinate' : 'indeterminate'} value={progress.value} />
         </Box>
       )}
-      <Button size="large" variant="contained" fullWidth startIcon={<RocketLaunchIcon />} disabled={busy} onClick={submit}>
+      <Button size="large" variant="contained" fullWidth startIcon={<RocketLaunchIcon />} disabled={busy} onClick={submit} sx={{ mt: 2 }}>
         {busy ? 'Memproses…' : 'Build APK & AAB'}
       </Button>
     </Container>

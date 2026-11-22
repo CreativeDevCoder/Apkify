@@ -52,7 +52,12 @@ export async function aiGenerate(req, env) {
   if (q.used >= q.limit) throw new HttpError(429, `Kredit AI hari ini habis (${q.limit}/hari). Coba lagi besok.`);
   if (q.global >= q.globalLimit) throw new HttpError(429, 'Kuota AI harian server sudah habis. Coba lagi besok.');
 
-  const messages = [{ role: 'system', content: SYSTEM }];
+  // Opsi backend Supabase: aplikasi memakai window.APKIFY.supabaseUrl/supabaseAnonKey (disuntikkan aplikasi Android)
+  const sys = body.supabase ? `${SYSTEM}
+- Aplikasi memakai backend Supabase: muat supabase-js dari https://esm.sh/@supabase/supabase-js@2 (satu-satunya pengecualian CDN),
+  buat client dengan window.APKIFY?.supabaseUrl dan window.APKIFY?.supabaseAnonKey (tampilkan pesan bila belum diisi),
+  gunakan Supabase Auth (email/password) untuk login dan tabel Supabase untuk data. Tulis komentar SQL pembuatan tabel + RLS di awal <script>.` : SYSTEM;
+  const messages = [{ role: 'system', content: sys }];
   if (previous) {
     messages.push({ role: 'user', content: `Ini kode aplikasi saat ini:\n${previous}` });
     messages.push({ role: 'user', content: `Ubah aplikasi di atas sesuai permintaan berikut, lalu kirim ulang SELURUH file HTML: ${prompt}` });
