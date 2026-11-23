@@ -22,7 +22,7 @@ class UserError extends Error {}
 
 async function main() {
   const cfgRes = await api(`/api/internal/builds/${BUILD_ID}/config`);
-  const { config: c, versionCode, keystore, iconUrl, sourceUrl, splashUrl, errorPageUrl, appId, apiBase } = await cfgRes.json();
+  const { config: c, versionCode, keystore, iconUrl, sourceUrl, splashUrl, errorPageUrl, fcmUrl, appId, apiBase } = await cfgRes.json();
   console.log(`Build ${BUILD_ID}: ${c.name} (${c.packageName}) v${c.versionName}/${versionCode} sumber=${c.source.type}`);
 
   fs.rmSync(WORK, { recursive: true, force: true });
@@ -50,6 +50,8 @@ async function main() {
     progress: c.progress || { style: 'bar' },
     tawk: c.features.tawk ? c.tawk : null,
     supabase: c.features.supabase ? c.supabase : null,
+    bottomNav: c.bottomNav || { items: [] }, fab: c.fab || {}, shortcuts: c.shortcuts || [], linkRules: c.linkRules || [],
+    customCss: c.customCss || '', customJs: c.customJs || '',
     encrypted: c.source.type !== 'url' && c.features.encrypt !== false
   };
   fs.writeFileSync(path.join(ASSETS, 'apkify.json'), JSON.stringify(runtime, null, 2));
@@ -66,7 +68,7 @@ async function main() {
   if (F.geolocation) perms.push('android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION');
   if (F.camera) perms.push('android.permission.CAMERA');
   if (F.microphone) perms.push('android.permission.RECORD_AUDIO', 'android.permission.MODIFY_AUDIO_SETTINGS');
-  if (F.onesignal || F.notifications) perms.push('android.permission.POST_NOTIFICATIONS');
+  if (F.onesignal || F.notifications || F.fcm) perms.push('android.permission.POST_NOTIFICATIONS');
   if (F.vibrate || F.jsApi) perms.push('android.permission.VIBRATE');
   if (F.keepAwake) perms.push('android.permission.WAKE_LOCK');
   if (F.downloads) perms.push('android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28');
@@ -82,13 +84,42 @@ async function main() {
   // Deep linking: tautan ke domain situs dibuka langsung di aplikasi
   if (F.deepLinking && c.source.type === 'url') {
     const host = new URL(c.source.url).hostname;
-    manifest = manifest.replace('<!--DEEPLINK-->', `<intent-filter>
+    manifest = manifest.replace('<!--DEEPLINK-->', `<!--DEEPLINK-->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="${xml(host)}" />
                 <data android:scheme="http" android:host="${xml(host)}" />
             </intent-filter>`);
+  }
+  // Share target: aplikasi muncul di menu "Bagikan" Android
+  if (F.shareTarget) {
+    manifest = manifest.replace('<!--DEEPLINK-->', `<!--DEEPLINK-->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>`);
+  }
+  // Android TV: muncul di launcher TV + banner
+  if (F.androidTv) {
+    manifest = manifest
+      .replace('<category android:name="android.intent.category.LAUNCHER" />', '<category android:name="android.intent.category.LAUNCHER" />\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />')
+      .replace('<!--FEATURES-->', '<uses-feature android:name="android.software.leanback" android:required="false" />\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />\n    <!--FEATURES-->')
+      .replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@mipmap/ic_launcher_round"\n        android:banner="@drawable/tv_banner"');
+  }
+  // Firebase Cloud Messaging
+  if (F.fcm && fcmUrl) {
+    await download(new URL(fcmUrl).pathname, path.join(WORK, 'app', 'google-services.json'));
+    const gs = JSON.parse(fs.readFileSync(path.join(WORK, 'app', 'google-services.json'), 'utf8'));
+    if (!(gs.client || []).some((x) => x.client_info?.android_client_info?.package_name === c.packageName)) {
+      throw new UserError(`google-services.json tidak memuat package ${c.packageName}. Tambahkan aplikasi Android dengan package ini di Firebase Console.`);
+    }
+    manifest = manifest.replace('<!--ADMOB-->', `<!--ADMOB-->
+        <service android:name=".FcmService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>`);
   }
   if (c.features.camera) manifest = manifest.replace('<!--FEATURES-->', '<uses-feature android:name="android.hardware.camera" android:required="false" />');
   fs.writeFileSync(path.join(WORK, 'app/src/main/AndroidManifest.xml'), manifest);
@@ -122,6 +153,13 @@ async function main() {
   // Splash: gambar kustom (bila diunggah) atau ikon aplikasi
   const splashSrc = splashUrl ? await download(new URL(splashUrl).pathname, path.join(TMP, 'splash.png')) : iconPath;
   await sharp(splashSrc).resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toFile(path.join(nodpi, 'splash_logo.png'));
+
+  // Banner Android TV (320x180)
+  if (F.androidTv) {
+    const ic = await sharp(iconPath).resize(140, 140, { fit: 'cover' }).png().toBuffer();
+    await sharp({ create: { width: 320, height: 180, channels: 4, background: c.colors.primary } })
+      .composite([{ input: ic, gravity: 'center' }]).png().toFile(path.join(RES, 'drawable-nodpi', 'tv_banner.png'));
+  }
 
   // Halaman error kustom
   if (errorPageUrl) await download(new URL(errorPageUrl).pathname, path.join(ASSETS, 'error.html'));
@@ -187,6 +225,12 @@ async function main() {
   setEnv('KS_STORE_PASS', ks.storePass);
   setEnv('KS_KEY_PASS', ks.keyPass);
   setEnv('KS_ALIAS', ks.alias);
+  // Sidik jari SHA-256 sertifikat -> untuk assetlinks.json (Android App Links terverifikasi)
+  try {
+    const out = execFileSync('keytool', ['-list', '-v', '-keystore', ksFile, '-storepass', ks.storePass, '-alias', ks.alias], { encoding: 'utf8' });
+    const sha = (out.match(/SHA256:\s*([0-9A-F:]{95})/i) || [])[1];
+    if (sha) await api(`/api/internal/builds/${BUILD_ID}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sha256: sha }) });
+  } catch (e) { console.warn('SHA-256 tidak terbaca:', e.message); }
   console.log('Proyek siap di', WORK);
 }
 

@@ -1,0 +1,45 @@
+# Build iOS di runner macOS (gratis untuk repo publik): proyek Xcode + IPA.
+# Tanpa sertifikat: IPA unsigned (untuk re-sign/sideload). Dengan sertifikat .p12 + profile: IPA siap App Store/Ad Hoc.
+name: build-ios
+run-name: ios ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id: { description: Build ID, required: true, type: string }
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      BUILDER_SECRET: ${{ secrets.BUILDER_SECRET }}
+      BUILD_ID: ${{ inputs.build_id }}
+      JOB: ios
+      LOG_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      WORK_DIR: ${{ github.workspace }}/work-ios
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install alat
+        run: |
+          brew install xcodegen
+          cd builder/scripts && npm install --no-audit --no-fund
+      - name: Siapkan proyek iOS
+        id: prepare
+        run: node builder/scripts/prepare-ios.mjs
+      - name: Build IPA
+        run: bash builder/scripts/build-ios.sh
+      - name: Unggah hasil
+        run: node builder/scripts/upload-ios.mjs
+      - name: Laporkan kegagalan
+        if: failure()
+        run: node builder/scripts/fail-job.mjs ${{ steps.prepare.outcome == 'failure' && 'prepare' || 'building' }}
+      - name: Bersihkan sertifikat
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dist.p12" "$RUNNER_TEMP/app.mobileprovision"

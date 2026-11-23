@@ -14,7 +14,9 @@ const FREE = [
   'Keystore tetap per package + cadangan',
   'Notifikasi email saat build selesai',
   'AI Studio (kredit harian), hosting subdomain, Remote Update',
-  'Iklan interstitial, live chat Tawk, JavaScript API, Supabase'
+  'Iklan interstitial, live chat Tawk, JavaScript API, Supabase',
+  'Build iOS (IPA), Windows (.exe/.msi), macOS (.dmg), Linux (.AppImage/.deb)',
+  'Plugin native: QR, biometrik, Play Billing, FCM, navigasi bawah, analitik'
 ];
 
 export default function Pricing() {

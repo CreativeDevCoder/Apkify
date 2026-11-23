@@ -1,0 +1,33 @@
+# Template XcodeGen — nilai __X__ diganti scripts/prepare-ios.mjs
+name: WebApp
+options:
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+targets:
+  WebApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+__WWW__
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: __BUNDLE__
+        PRODUCT_NAME: WebApp
+        INFOPLIST_FILE: App/Info.plist
+        MARKETING_VERSION: __VERSION__
+        CURRENT_PROJECT_VERSION: __BUILD__
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ENABLE_BITCODE: NO
+        DEVELOPMENT_TEAM: "__TEAM__"
+        CODE_SIGN_STYLE: __SIGNSTYLE__
+schemes:
+  WebApp:
+    build:
+      targets:
+        WebApp: all
+    archive:
+      config: Release

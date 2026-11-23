@@ -150,7 +150,7 @@ export default function Layout({ children }) {
             </Grid>
             {[
               ['Produk', [['/create', 'Buat aplikasi'], ['/ai-studio', 'AI Studio'], ['/templates', 'Template'], ['/market', 'Marketplace'], ['/hosting', 'Hosting gratis'], ['/media-app', 'Media App'], ['/get-app', 'Aplikasi Android']]],
-              ['Sumber daya', [['/docs', 'Panduan'], ['/guides', 'Per platform'], ['/docs#publish', 'Publikasi Play Store'], ['/tools', 'Tools gratis'], ['/news', 'Berita'], ['/website-to-app', 'Website ke aplikasi'], ['/html-to-app', 'HTML ke APK']]],
+              ['Sumber daya', [['/docs', 'Panduan'], ['/guides', 'Per platform'], ['/docs#publish', 'Publikasi Play Store'], ['/tools', 'Tools gratis'], ['/news', 'Berita'], ['/website-to-app', 'Website ke aplikasi'], ['/website-to-exe', 'Website ke EXE'], ['/website-to-ipa', 'Website ke IPA'], ['/html-to-app', 'HTML ke APK']]],
               ['Perusahaan', [['/about', 'Tentang'], ['/features', 'Fitur'], ['/compare', 'Bandingkan'], ['/pricing', 'Harga'], ['/contact', 'Kontak'], ['/privacy', 'Kebijakan Privasi'], ['/terms', 'Syarat & Ketentuan']]]
             ].map(([h, links]) => (
               <Grid item xs={6} md={2.66} key={h}>

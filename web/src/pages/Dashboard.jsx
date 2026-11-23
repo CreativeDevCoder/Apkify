@@ -8,14 +8,15 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import KeyIcon from '@mui/icons-material/VpnKey';
-import DeleteIcon from '@mui/icons-material/Delete';
 import { ref, get, query, limitToLast, orderByChild } from 'firebase/database';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { swr, clearCache } from '../lib/cache';
 import { api, fileUrl } from '../lib/api';
 import StatusChip from '../components/StatusChip';
-import { RemoteDialog, KeystoreDialog } from '../components/AppDialogs';
+import { RemoteDialog, KeystoreDialog, AnalyticsDialog, AppLinksDialog, IosSigningDialog } from '../components/AppDialogs';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { Menu, MenuItem } from '@mui/material';
 import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
 
 const toList = (obj) => Object.entries(obj || {}).map(([id, v]) => ({ id, ...v }));
@@ -28,6 +29,8 @@ export default function Dashboard() {
   const [confirm, setConfirm] = useState(null);
   const [remoteApp, setRemoteApp] = useState(null);
   const [ksApp, setKsApp] = useState(null);
+  const [more, setMore] = useState(null); // { el, app }
+  const [dlg, setDlg] = useState({}); // { analytics|links|ios: app }
 
   const load = useCallback((force = false) => {
     setErr('');
@@ -96,7 +99,7 @@ export default function Dashboard() {
                   <Box sx={{ flex: 1 }} />
                   <Tooltip title="Remote Update"><IconButton size="small" onClick={() => setRemoteApp(a)}><SystemUpdateIcon fontSize="small" /></IconButton></Tooltip>
                   <Tooltip title="Keystore & Signing"><IconButton size="small" onClick={() => setKsApp(a)}><KeyIcon fontSize="small" /></IconButton></Tooltip>
-                  <Tooltip title="Hapus"><IconButton size="small" onClick={() => setConfirm(a)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="Lainnya"><IconButton size="small" onClick={(e) => setMore({ el: e.currentTarget, app: a })}><MoreVertIcon fontSize="small" /></IconButton></Tooltip>
                 </CardActions>
               </Card>
             </Grid>
@@ -120,6 +123,15 @@ export default function Dashboard() {
         </>
       )}
 
+      <Menu anchorEl={more?.el} open={!!more} onClose={() => setMore(null)}>
+        <MenuItem onClick={() => { setDlg({ analytics: more.app }); setMore(null); }}>Analitik</MenuItem>
+        <MenuItem onClick={() => { setDlg({ links: more.app }); setMore(null); }}>App Links (assetlinks.json)</MenuItem>
+        <MenuItem onClick={() => { setDlg({ ios: more.app }); setMore(null); }}>Sertifikat iOS</MenuItem>
+        <MenuItem sx={{ color: 'error.main' }} onClick={() => { setConfirm(more.app); setMore(null); }}>Hapus aplikasi</MenuItem>
+      </Menu>
+      <AnalyticsDialog app={dlg.analytics} onClose={() => setDlg({})} />
+      <AppLinksDialog app={dlg.links} onClose={() => setDlg({})} />
+      <IosSigningDialog app={dlg.ios} onClose={() => setDlg({})} />
       <RemoteDialog app={remoteApp} onClose={() => setRemoteApp(null)} />
       <KeystoreDialog app={ksApp} isAnon={isAnon} onClose={() => setKsApp(null)} />
       <Dialog open={!!confirm} onClose={() => setConfirm(null)}>

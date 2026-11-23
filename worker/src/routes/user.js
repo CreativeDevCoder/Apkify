@@ -3,7 +3,7 @@ import { requireUser, rtdb } from '../firebase.js';
 import { putFile, getFileMeta, deleteFile } from '../storage/index.js';
 import { sanitizeConfig } from '../config.js';
 import { decryptStr } from '../crypto.js';
-import { dispatchBuild } from '../github.js';
+import { jobsFor, dispatchAll } from '../github.js';
 import { getSettings } from './admin.js';
 import { json, HttpError, randomId, pkgKey, dayKey, readJson, b64, ipKey } from '../util.js';
 
@@ -39,6 +39,15 @@ export async function upload(req, env) {
     if (!mime) throw new HttpError(400, 'Gambar harus PNG, JPG, atau WebP');
     const r = await putFile(env, buf, { owner: user.uid, kind: 'image', name: `image.${mime.split('/')[1]}`, mime, public: true });
     return json({ fileId: r.fileId });
+  }
+  if (kind === 'fcm') {
+    // google-services.json dari Firebase Console (privat)
+    if (buf.byteLength > 64 * 1024) throw new HttpError(413, 'File terlalu besar');
+    let j;
+    try { j = JSON.parse(new TextDecoder().decode(buf)); } catch { throw new HttpError(400, 'Bukan file JSON yang valid'); }
+    if (!j.project_info || !Array.isArray(j.client)) throw new HttpError(400, 'Bukan google-services.json dari Firebase');
+    const r = await putFile(env, buf, { owner: user.uid, kind: 'fcm', name: 'google-services.json', mime: 'application/json', public: false });
+    return json({ fileId: r.fileId, packages: j.client.map((x) => x.client_info?.android_client_info?.package_name).filter(Boolean) });
   }
   if (kind === 'zip') {
     if (!(head[0] === 0x50 && head[1] === 0x4b)) throw new HttpError(400, 'File bukan ZIP yang valid');
@@ -87,11 +96,17 @@ export async function createBuild(req, env, ctx) {
   if (owner && owner !== user.uid) throw new HttpError(409, 'Package name sudah dipakai pengguna lain. Gunakan nama lain.');
 
   // Validasi file milik user
-  for (const fid of [cfg.iconFileId, cfg.source.fileId, cfg.splash.fileId, cfg.errorPageFileId].filter(Boolean)) {
+  for (const fid of [cfg.iconFileId, cfg.source.fileId, cfg.splash.fileId, cfg.errorPageFileId, cfg.fcmFileId].filter(Boolean)) {
     const m = await getFileMeta(env, fid);
     if (!m || m.owner !== user.uid) throw new HttpError(403, 'File tidak valid');
   }
   if (!cfg.iconFileId) throw new HttpError(400, 'Ikon wajib ada');
+  if (cfg.features.fcm && !cfg.fcmFileId) throw new HttpError(400, 'Unggah google-services.json untuk Firebase Cloud Messaging');
+  // Desktop & iOS memakai runner Windows/macOS: khusus akun terdaftar
+  if (user.anonymous && Object.entries(cfg.platforms).some(([k, v]) => v && k !== 'android')) {
+    throw new HttpError(403, 'Build desktop & iOS butuh akun gratis. Daftar dulu, atau pilih Android saja.');
+  }
+  const jobs = jobsFor(cfg.platforms);
 
   // HTML tempel -> simpan sebagai file (RTDB tetap ramping)
   // Halaman error kustom -> file privat
@@ -129,6 +144,7 @@ export async function createBuild(req, env, ctx) {
     },
     [`builds/${buildId}`]: {
       uid: user.uid, appId, ...summary, status: 'queued', createdAt: now, updatedAt: now,
+      jobs: Object.fromEntries(jobs.map((j) => [j, 'queued'])),
       iconFileId: cfg.iconFileId, ...(cfg.source.fileId ? { sourceFileId: cfg.source.fileId } : {})
     },
     [`buildConfigs/${buildId}`]: { uid: user.uid, appId, versionCode, email: user.email || '', config: cfg },
@@ -140,7 +156,10 @@ export async function createBuild(req, env, ctx) {
   });
 
   try {
-    await dispatchBuild(env, buildId);
+    const failedJobs = await dispatchAll(env, buildId, jobs);
+    if (failedJobs.length) {
+      await db.update(`builds/${buildId}`, Object.fromEntries(failedJobs.flatMap((j) => [[`jobs/${j}`, 'failed'], [`jobErrors/${j}`, 'Gagal memulai build platform ini.']])));
+    }
   } catch (e) {
     await db.update('', {
       [`builds/${buildId}/status`]: 'failed', [`builds/${buildId}/error`]: 'Gagal memulai build di cloud. Coba lagi beberapa saat.',
@@ -176,7 +195,7 @@ export async function deleteApp(req, env, ctx, appId) {
   const app = await db.get(`apps/${user.uid}/${appId}`);
   if (!app) throw new HttpError(404, 'Aplikasi tidak ditemukan');
   const ub = (await db.query(`userBuilds/${user.uid}`, { orderBy: 'appId', equalTo: appId })) || {};
-  const patch = { [`apps/${user.uid}/${appId}`]: null };
+  const patch = { [`apps/${user.uid}/${appId}`]: null, [`analytics/${appId}`]: null, [`remote/${appId}`]: null };
   const fileIds = new Set([app.iconFileId, app.config?.source?.fileId].filter(Boolean));
   const builds = await Promise.all(Object.keys(ub).map((id) => db.get(`builds/${id}`)));
   Object.keys(ub).forEach((id, i) => {
@@ -188,6 +207,7 @@ export async function deleteApp(req, env, ctx, appId) {
     if (b?.aabFileId) fileIds.add(b.aabFileId);
     if (b?.iconFileId) fileIds.add(b.iconFileId);
     if (b?.sourceFileId) fileIds.add(b.sourceFileId);
+    Object.values(b?.artifacts || {}).forEach((x) => x?.fileId && fileIds.add(x.fileId));
   });
   await db.update('', patch);
   ctx.waitUntil(Promise.all([...fileIds].map((f) => deleteFile(env, f).catch(() => {}))));

@@ -61,6 +61,41 @@ class AppConfig(private val json: JSONObject) {
     val jsApi = flag("jsApi")
     val remoteUpdate = flag("remoteUpdate")
     val cacheMode: String = f.optString("cacheMode", "default")
+    // Rilis 4: plugin native
+    val bottomNav = flag("bottomNav")
+    val fab = flag("fab")
+    val qrScanner = flag("qrScanner")
+    val biometric = flag("biometric")
+    val inAppReview = flag("inAppReview")
+    val billing = flag("billing")
+    val nativeStorage = flag("nativeStorage")
+    val shareTarget = flag("shareTarget")
+    val shortcutsOn = flag("shortcuts")
+    val analytics = flag("analytics")
+    val fcm = flag("fcm")
+    val customCode = flag("customCode")
+    val linkRulesOn = flag("linkRules")
+
+    data class NavItem(val label: String, val icon: String, val url: String)
+    data class Rule(val regex: Regex, val action: String)
+
+    val navItems: List<NavItem> = json.optJSONObject("bottomNav")?.optJSONArray("items")?.let { a ->
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { NavItem(it.optString("label"), it.optString("icon", "home"), it.optString("url")) } }
+    } ?: emptyList()
+    val fabIcon: String = json.optJSONObject("fab")?.optString("icon", "chat") ?: "chat"
+    val fabAction: String = json.optJSONObject("fab")?.optString("action", "url") ?: "url"
+    val fabUrl: String = json.optJSONObject("fab")?.optString("url").orEmpty()
+    val shortcuts: List<Pair<String, String>> = json.optJSONArray("shortcuts")?.let { a ->
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { it.optString("label") to it.optString("url") } }
+    } ?: emptyList()
+    val linkRules: List<Rule> = if (!linkRulesOn) emptyList() else json.optJSONArray("linkRules")?.let { a ->
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o -> runCatching { Rule(Regex(o.optString("pattern")), o.optString("action")) }.getOrNull() } }
+    } ?: emptyList()
+    val customCss: String = if (customCode) json.optString("customCss") else ""
+    val customJs: String = if (customCode) json.optString("customJs") else ""
+
+    /** URL relatif (mis. "/keranjang", "#/profil") diselesaikan terhadap halaman awal */
+    fun resolve(u: String): String = runCatching { java.net.URI(startUrl).resolve(u).toString() }.getOrDefault(u)
 
     private val sm = json.optJSONObject("sideMenu") ?: JSONObject()
     val about: String = sm.optString("about")

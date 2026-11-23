@@ -1,0 +1,70 @@
+# Build aplikasi desktop dengan Tauri 2: Windows (.exe + .msi), macOS (.dmg universal), Linux (.AppImage + .deb).
+# Dipicu Worker: input build_id + targets (mis. "windows,macos").
+name: build-desktop
+run-name: desktop ${{ inputs.build_id }} (${{ inputs.targets }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id: { description: Build ID, required: true, type: string }
+      targets: { description: "windows,macos,linux", required: true, type: string }
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { job: windows, os: windows-latest, bundles: "nsis,msi", args: "" }
+          - { job: macos, os: macos-latest, bundles: "dmg", args: "--target universal-apple-darwin" }
+          - { job: linux, os: ubuntu-22.04, bundles: "appimage,deb", args: "" }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      BUILDER_SECRET: ${{ secrets.BUILDER_SECRET }}
+      BUILD_ID: ${{ inputs.build_id }}
+      JOB: ${{ matrix.job }}
+      LOG_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      WORK_DIR: ${{ github.workspace }}/work-desktop
+    steps:
+      - uses: actions/checkout@v4
+        if: contains(inputs.targets, matrix.job)
+      - uses: actions/setup-node@v4
+        if: contains(inputs.targets, matrix.job)
+        with: { node-version: '20' }
+      - uses: dtolnay/rust-toolchain@stable
+        if: contains(inputs.targets, matrix.job)
+        with:
+          targets: ${{ matrix.job == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Dependensi Linux
+        if: contains(inputs.targets, matrix.job) && matrix.job == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install script deps
+        if: contains(inputs.targets, matrix.job)
+        working-directory: builder/scripts
+        run: npm install --no-audit --no-fund
+      - name: Siapkan proyek desktop
+        id: prepare
+        if: contains(inputs.targets, matrix.job)
+        run: node builder/scripts/prepare-desktop.mjs
+      # Cache kompilasi Rust lintas build -> build berikutnya jauh lebih cepat
+      - uses: Swatinem/rust-cache@v2
+        if: contains(inputs.targets, matrix.job)
+        with:
+          workspaces: work-desktop/src-tauri -> target
+          key: ${{ matrix.job }}
+      - name: Build
+        if: contains(inputs.targets, matrix.job)
+        working-directory: work-desktop
+        shell: bash
+        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.args }}
+      - name: Unggah hasil
+        if: contains(inputs.targets, matrix.job)
+        run: node builder/scripts/upload-desktop.mjs
+      - name: Laporkan kegagalan
+        if: failure() && contains(inputs.targets, matrix.job)
+        run: node builder/scripts/fail-job.mjs ${{ steps.prepare.outcome == 'failure' && 'prepare' || 'building' }}

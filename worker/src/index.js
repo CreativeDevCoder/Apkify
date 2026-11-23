@@ -2,7 +2,8 @@ import { json, corsHeaders, HttpError } from './util.js';
 import { rtdb } from './firebase.js';
 import { upload, createBuild, downloadKeystore, deleteApp } from './routes/user.js';
 import { serveFile } from './routes/files.js';
-import { getConfig, getFile, saveKeystore, uploadArtifact, finish } from './routes/internal.js';
+import { getConfig, getFile, saveKeystore, uploadArtifact, finish, buildMeta } from './routes/internal.js';
+import { siteMeta, siteIcon, ping, appAnalytics, iosSigning } from './routes/platform.js';
 import { handleAdmin } from './routes/admin.js';
 import { aiGenerate, aiQuota } from './routes/ai.js';
 import { uploadKeystore, getRemote, ownerRemote, uploadBundle, mySites, publishSite, deleteSite, serveSite } from './routes/extra.js';
@@ -50,6 +51,12 @@ async function route(req, env, ctx) {
   if ((r = p.match(/^\/api\/market\/([A-Za-z0-9]+)\/sold$/)) && m === 'POST') return markSold(req, env, r[1]);
 
   if ((r = p.match(/^\/api\/public\/apps\/([A-Za-z0-9]+)\/remote$/)) && m === 'GET') return getRemote(req, env, ctx, r[1]);
+  if (p === '/api/public/site-meta' && m === 'GET') return siteMeta(req, env, ctx);
+  if (p === '/api/public/site-icon' && m === 'GET') return siteIcon(req, env);
+  if ((r = p.match(/^\/api\/public\/apps\/([A-Za-z0-9]+)\/ping$/)) && m === 'POST') return ping(req, env, r[1]);
+  if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/analytics$/)) && m === 'GET') return appAnalytics(req, env, r[1]);
+  if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/ios-signing$/))) return iosSigning(req, env, r[1]);
+  if ((r = p.match(/^\/api\/internal\/builds\/([A-Za-z0-9]+)\/meta$/)) && m === 'POST') return buildMeta(req, env, r[1]);
   if (p === '/api/keystores' && m === 'POST') return uploadKeystore(req, env);
   if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/remote$/)) && (m === 'GET' || m === 'PUT')) return ownerRemote(req, env, r[1]);
   if ((r = p.match(/^\/api\/apps\/([A-Za-z0-9]+)\/bundle$/)) && m === 'POST') return uploadBundle(req, env, ctx, r[1]);
@@ -102,7 +109,7 @@ async function pruneQuotas(env) {
   // kunci kuota berstruktur {root}/{yyyymmdd}/{id} -> cukup 1 baca shallow + 1 patch per root
   const db = rtdb(env);
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  for (const root of ['quotaIp', 'contactQuota', 'aiQuota', 'quota']) {
+  for (const root of ['quotaIp', 'contactQuota', 'aiQuota', 'quota', 'analyticsIp']) {
     const days = (await db.get(root, { shallow: 'true' })) || {};
     const patch = {};
     for (const d of Object.keys(days)) if (d < today) patch[`${root}/${d}`] = null;

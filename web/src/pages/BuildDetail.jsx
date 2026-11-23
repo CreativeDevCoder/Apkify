@@ -12,6 +12,19 @@ import { ref, onValue } from 'firebase/database';
 import { db } from '../firebase';
 import { fileUrl } from '../lib/api';
 import StatusChip, { FINAL } from '../components/StatusChip';
+import { PLATFORM_INFO } from '../components/create/PlatformPicker';
+import { Chip, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/Download';
+
+// Artefak per platform (urutan tampil)
+const ART = {
+  android: [['apk', 'APK — pasang langsung'], ['aab', 'AAB — upload ke Google Play']],
+  windows: [['exe', 'Installer .exe (NSIS)'], ['msi', 'Installer .msi']],
+  macos: [['dmg', 'Disk image .dmg (Universal)']],
+  linux: [['appimage', 'AppImage (semua distro)'], ['deb', 'Paket .deb (Ubuntu/Debian)']],
+  ios: [['ipa', 'IPA'], ['xcode', 'Proyek Xcode (.zip)']]
+};
+const JOB_LABEL = { queued: 'antre', building: 'dibuild', success: 'selesai', failed: 'gagal' };
 
 const STEPS = ['queued', 'building', 'uploading', 'success'];
 const LABEL = { queued: 'Antre', building: 'Build di cloud', uploading: 'Simpan hasil', success: 'Selesai' };
@@ -55,6 +68,8 @@ export default function BuildDetail() {
   if (b === undefined) return <Container sx={{ py: 4 }}><Skeleton variant="rounded" height={300} /></Container>;
   if (b === null) return <Container sx={{ py: 4 }}><Alert severity="error">Build tidak ditemukan atau Anda tidak punya akses.</Alert></Container>;
 
+  const jobs = b.jobs || { android: b.status === 'success' ? 'success' : b.status === 'failed' ? 'failed' : 'building' };
+  const art = (t) => b.artifacts?.[t] || (b[`${t}FileId`] ? { fileId: b[`${t}FileId`], size: b[`${t}Size`] } : null);
   const active = b.status === 'failed' ? STEPS.indexOf(b.failedAt || 'building') : STEPS.indexOf(b.status);
 
   return (
@@ -74,6 +89,14 @@ export default function BuildDetail() {
               <Step key={s}><StepLabel error={b.status === 'failed' && i === active}>{LABEL[s]}</StepLabel></Step>
             ))}
           </Stepper>
+          {Object.keys(jobs).length > 1 && (
+            <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
+              {Object.entries(jobs).map(([j, st]) => (
+                <Chip key={j} icon={PLATFORM_INFO[j]?.icon} label={`${PLATFORM_INFO[j]?.label || j}: ${JOB_LABEL[st] || st}`}
+                  color={st === 'success' ? 'success' : st === 'failed' ? 'error' : 'default'} variant={st === 'success' ? 'filled' : 'outlined'} />
+              ))}
+            </Stack>
+          )}
           {!FINAL.includes(b.status) && (
             <Box sx={{ mt: 3 }}>
               <LinearProgress />
@@ -85,13 +108,36 @@ export default function BuildDetail() {
         </CardContent>
       </Card>
 
-      {b.status === 'failed' && (
-        <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" component={RouterLink} to={`/create/${b.appId}`}>Coba lagi</Button>}>
+      {(b.status === 'failed' || b.status === 'partial') && (
+        <Alert severity={b.status === "partial" ? "warning" : "error"} sx={{ mb: 2 }} action={<Button color="inherit" component={RouterLink} to={`/create/${b.appId}`}>Coba lagi</Button>}>
           {b.error || 'Build gagal.'} {b.logUrl && <Link href={b.logUrl} target="_blank" rel="noopener">Lihat log</Link>}
         </Alert>
       )}
 
-      {b.status === 'success' && (
+      {(b.status === 'success' || b.status === 'partial') && Object.keys(jobs).some((j) => j !== 'android') && (
+        <Card sx={{ mb: 2 }}><CardContent>
+          <Typography variant="h6" gutterBottom>Unduhan per platform</Typography>
+          {Object.entries(jobs).map(([j, st]) => (
+            <Box key={j} sx={{ mb: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>{PLATFORM_INFO[j]?.icon}<Typography fontWeight={700}>{PLATFORM_INFO[j]?.label || j}</Typography>
+                {st !== 'success' && <Chip size="small" color="error" label={b.jobErrors?.[j] || 'gagal'} />}</Stack>
+              <List dense>
+                {(ART[j] || []).map(([t, label]) => art(t) && (
+                  <ListItem key={t} secondaryAction={<Button size="small" startIcon={<DownloadIcon />} href={fileUrl(art(t).fileId, art(t).name || `${b.packageName}.${t}`)}>Unduh</Button>}>
+                    <ListItemIcon sx={{ minWidth: 34 }}><DownloadIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText primary={label} secondary={art(t).size ? `${(art(t).size / 1048576).toFixed(1)} MB` : ''} />
+                  </ListItem>
+                ))}
+              </List>
+              {j === 'ios' && st === 'success' && <Typography variant="caption" color="text.secondary">IPA tanpa sertifikat harus ditandatangani ulang (Sideloadly/AltStore/Xcode). Unggah sertifikat di Studio untuk IPA siap App Store.</Typography>}
+              {(j === 'windows' || j === 'macos') && st === 'success' && <Typography variant="caption" color="text.secondary" display="block">Belum bertanda tangan kode: pilih “More info → Run anyway” (Windows) atau klik kanan → Open (macOS).</Typography>}
+              <Divider sx={{ mt: 1 }} />
+            </Box>
+          ))}
+        </CardContent></Card>
+      )}
+
+      {(b.status === 'success' || (b.status === 'partial' && jobs.android === 'success')) && art('apk') && (
         <Card>
           <CardContent>
             <Grid container spacing={3} alignItems="center">

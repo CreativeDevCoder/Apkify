@@ -21,7 +21,10 @@ const FEATURES = [
   { icon: <VerifiedIcon />, t: 'Kunci tanda tangan tetap', d: 'Setiap package name selalu ditandatangani kunci yang sama, jadi update terpasang mulus.' },
   { icon: <NotificationsIcon />, t: 'Push notification', d: 'Integrasi OneSignal cukup dengan App ID.' },
   { icon: <PaidIcon />, t: 'Iklan AdMob', d: 'Pasang banner AdMob milik Anda — pendapatannya 100% untuk Anda.' },
-  { icon: <WifiOffIcon />, t: 'Offline & cache pintar', d: 'Halaman offline rapi, mode cache bisa diatur, konten ZIP/HTML berjalan tanpa internet.' }
+  { icon: <WifiOffIcon />, t: 'Offline & cache pintar', d: 'Halaman offline rapi, mode cache bisa diatur, konten ZIP/HTML berjalan tanpa internet.' },
+  { icon: <BoltIcon />, t: '5 platform sekaligus', d: 'Android, iOS, Windows, macOS, dan Linux dibangun paralel dari satu konfigurasi.' },
+  { icon: <VerifiedIcon />, t: 'Plugin native', d: 'Scanner QR, biometrik, Google Play Billing, ulasan, shortcut, share target, FCM — lewat window.Apkify.' },
+  { icon: <StoreIcon />, t: 'Analitik & Remote Update', d: 'Lihat pengguna aktif, kirim pesan, paksa update, dan perbarui konten tanpa build ulang.' }
 ];
 
 const STEPS = [
@@ -56,10 +59,10 @@ export default function Home() {
             <Grid item xs={12} md={6}>
               <Chip label="100% gratis • tanpa watermark" color="primary" variant="outlined" sx={{ mb: 2 }} />
               <Typography variant="h2" sx={{ fontSize: { xs: 34, md: 52 }, lineHeight: 1.1, mb: 2 }}>
-                Ubah website jadi aplikasi Android dalam hitungan menit
+                Ubah website jadi aplikasi Android, iOS, Windows, macOS & Linux
               </Typography>
               <Typography variant="h6" color="text.secondary" fontWeight={400}>
-                Dari URL, ZIP, atau HTML menjadi APK & AAB siap Google Play. Lengkap dengan ikon, splash screen, push notification, dan AdMob.
+                Dari URL, ZIP, atau HTML menjadi APK/AAB, IPA, .exe, .dmg, dan .AppImage — gratis, tanpa watermark. Lengkap dengan navigasi bawah, scanner QR, biometrik, in-app purchase, push notification, dan AdMob.
               </Typography>
               {stats?.totalBuilds > 0 && (
                 <Typography sx={{ mt: 2 }} color="text.secondary">

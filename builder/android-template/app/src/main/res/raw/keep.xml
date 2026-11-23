@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon navigasi dipilih saat runtime (getIdentifier) -> jangan dibuang resource shrinker -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@drawable/ic_nav_*,@drawable/tv_banner" />

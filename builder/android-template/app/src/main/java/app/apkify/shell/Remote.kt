@@ -40,6 +40,26 @@ object Remote {
         return WebResourceResponse(mime, if (EncryptedAssets.isText(mime)) "utf-8" else null, FileInputStream(f))
     }
 
+    /** Analitik anonim: maksimal 1 ping per perangkat per hari (jumlah pengguna aktif & instalasi). */
+    fun ping(ctx: Context) {
+        val cfg = AppConfig.get(ctx)
+        if (!cfg.analytics || cfg.apiBase.isBlank() || cfg.appId.isBlank()) return
+        val prefs = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+        if (prefs.getString("ping", "") == today) return
+        val first = !prefs.contains("ping")
+        thread(name = "apkify-ping") {
+            runCatching {
+                val c = open("${cfg.apiBase}/api/public/apps/${cfg.appId}/ping").apply {
+                    requestMethod = "POST"; doOutput = true; setRequestProperty("content-type", "application/json")
+                }
+                c.outputStream.use { it.write("{\"first\":$first}".toByteArray()) }
+                if (c.responseCode == 200) prefs.edit().putString("ping", today).apply()
+                c.disconnect()
+            }
+        }
+    }
+
     fun check(activity: MainActivity) {
         val cfg = AppConfig.get(activity)
         if (!cfg.remoteUpdate || cfg.apiBase.isBlank() || cfg.appId.isBlank()) return

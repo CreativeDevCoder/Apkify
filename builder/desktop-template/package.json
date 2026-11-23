@@ -1,0 +1,8 @@
+{
+  "name": "apkify-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}

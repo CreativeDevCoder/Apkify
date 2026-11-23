@@ -29,6 +29,27 @@ export const LANDINGS = {
     points: [['Offline penuh', 'Semua file dibundel ke APK — cocok untuk kalkulator, kuis, katalog, dan game HTML5.'], ['Terenkripsi', 'HTML/JS dienkripsi AES-GCM sehingga tidak mudah disalin dari APK.'], ['Update tanpa build ulang', 'Aktifkan Remote Update untuk mengirim konten baru lewat OTA.']],
     faq: [['ZIP saya punya banyak halaman?', 'Bisa. Pastikan index.html ada di folder utama dan link memakai path relatif.'], ['Bisa memakai API luar?', 'Bisa, selama API mengizinkan CORS — atau aktifkan opsi “Izinkan cross-origin”.']]
   },
+  '/website-to-exe': {
+    title: 'Website to EXE — gratis', h1: 'Ubah website jadi aplikasi Windows (.exe & .msi)',
+    lead: 'Masukkan URL atau ZIP, dapatkan installer Windows yang ringan (± 3–10 MB) — bukan Electron 100 MB. Sekaligus APK, macOS, dan Linux dari konfigurasi yang sama.',
+    cta: ['/create?type=url', 'Buat .exe sekarang'],
+    points: [['Ringan & cepat', 'Dibangun dengan Tauri: memakai WebView2 bawaan Windows, hemat RAM dan ukuran unduhan.'], ['Installer lengkap', 'Setup .exe (NSIS) dan .msi untuk distribusi kantor/sekolah, dengan ikon & nama aplikasi Anda.'], ['Atur jendela', 'Ukuran, layar penuh/kiosk, selalu di atas, aturan link, CSS/JS kustom.']],
+    faq: [['Kenapa muncul peringatan SmartScreen?', 'Installer belum bertanda tangan kode. Pilih “More info → Run anyway”, atau tanda tangani dengan sertifikat code signing Anda sendiri.'], ['Bisa offline?', 'Bisa — gunakan sumber ZIP/HTML, semua file dibundel ke aplikasi.']]
+  },
+  '/website-to-ipa': {
+    title: 'Website to IPA (iOS)', h1: 'Ubah website jadi aplikasi iPhone & iPad (.ipa)',
+    lead: 'Build iOS di cloud tanpa Mac: dapatkan proyek Xcode dan IPA. Unggah sertifikat Apple Anda untuk IPA yang siap App Store.',
+    cta: ['/create?type=url', 'Buat aplikasi iOS'],
+    points: [['Tanpa Mac', 'Build berjalan di runner macOS cloud — Anda cukup memakai browser.'], ['Siap App Store', 'Dengan sertifikat .p12 + provisioning profile, IPA ditandatangani dan siap diunggah lewat Transporter.'], ['Proyek Xcode ikut', 'Unduh proyek SwiftUI + WKWebView lengkap untuk dikembangkan lebih lanjut.']],
+    faq: [['Apakah Apple pasti menerima?', 'Tidak dijamin. Apple menolak aplikasi yang sekadar membungkus website tanpa nilai tambah (Guideline 4.2). Tambahkan fitur native seperti navigasi bawah, Face ID, dan notifikasi.'], ['IPA unsigned untuk apa?', 'Untuk diuji/ditandatangani ulang dengan Sideloadly, AltStore, atau Xcode memakai Apple ID Anda.']]
+  },
+  '/website-to-desktop-app': {
+    title: 'Website to Desktop App', h1: 'Aplikasi desktop Windows, macOS & Linux dari website',
+    lead: 'Satu klik untuk tiga sistem operasi: .exe/.msi, .dmg universal, .AppImage/.deb — gratis, dibangun paralel di cloud.',
+    cta: ['/create?type=url', 'Buat aplikasi desktop'],
+    points: [['Tiga OS sekaligus', 'Pilih Windows, macOS, dan Linux; semuanya dibangun bersamaan.'], ['Kecil & aman', 'Tauri (Rust) + WebView sistem: lebih kecil dan hemat memori dibanding Electron.'], ['Konsisten dengan mobile', 'Ikon, nama, aturan link, dan kode kustom sama dengan versi Android/iOS.']],
+    faq: [['Apakah perlu memasang sesuatu?', 'Tidak. Windows 10/11 sudah punya WebView2 (installer mengunduhnya bila belum ada).'], ['macOS mendukung Apple Silicon?', 'Ya, .dmg dibangun universal (Apple Silicon + Intel).']]
+  },
   '/ai-website-to-app': {
     title: 'AI Website to App', h1: 'Ubah situs buatan AI menjadi aplikasi Android',
     lead: 'Proyek dari Lovable, Bolt, v0, Replit, Google AI Studio, atau AI Studio kami sendiri bisa langsung dijadikan APK.',

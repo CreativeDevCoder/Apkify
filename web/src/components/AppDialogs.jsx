@@ -117,3 +117,99 @@ export function KeystoreDialog({ app, onClose, isAnon }) {
     </Dialog>
   );
 }
+
+/** Analitik: instalasi & pengguna aktif harian (30 hari) */
+export function AnalyticsDialog({ app, onClose }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (!app) return;
+    setD(null); setErr('');
+    api.get(`/api/apps/${app.id}/analytics`).then(setD).catch((e) => setErr(e.message));
+  }, [app]);
+  const max = Math.max(1, ...(d?.days || []).map((x) => x.active));
+  const total = (d?.days || []).reduce((s, x) => s + x.active, 0);
+  return (
+    <Dialog open={!!app} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Analitik — {app?.name}</DialogTitle>
+      <DialogContent>
+        {!app?.config?.features?.analytics && <Alert severity="info" sx={{ mb: 2 }}>Aktifkan “Analitik pengguna aktif” di Plugin native lalu build ulang.</Alert>}
+        {err && <Alert severity="error">{err}</Alert>}
+        {d && <>
+          <Stack direction="row" spacing={4} sx={{ mb: 2 }}>
+            <div><Typography variant="h4" fontWeight={800}>{d.installs.toLocaleString('id-ID')}</Typography><Typography variant="caption">instalasi (perangkat baru)</Typography></div>
+            <div><Typography variant="h4" fontWeight={800}>{total.toLocaleString('id-ID')}</Typography><Typography variant="caption">pengguna aktif · 30 hari (jumlah harian)</Typography></div>
+          </Stack>
+          <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ height: 140 }}>
+            {d.days.map((x) => (
+              <div key={x.day} title={`${x.day.slice(6)}/${x.day.slice(4, 6)}: ${x.active}`} style={{ flex: 1, height: `${Math.max(2, (x.active / max) * 100)}%`, background: '#4f46e5', borderRadius: 3, opacity: x.active ? 1 : 0.2 }} />
+            ))}
+          </Stack>
+          <Typography variant="caption" color="text.secondary">Pengguna aktif harian (1 perangkat dihitung sekali per hari). Data anonim, tanpa identitas pengguna.</Typography>
+        </>}
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Tutup</Button></DialogActions>
+    </Dialog>
+  );
+}
+
+/** Android App Links: file assetlinks.json untuk verifikasi domain */
+export function AppLinksDialog({ app, onClose }) {
+  const host = (() => { try { return new URL(app?.config?.source?.url).host; } catch { return 'domainanda.com'; } })();
+  const json = app?.signingSha256 ? JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: app.packageName, sha256_cert_fingerprints: [app.signingSha256] } }], null, 2) : '';
+  return (
+    <Dialog open={!!app} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>App Links & sidik jari — {app?.name}</DialogTitle>
+      <DialogContent>
+        {!app?.signingSha256 ? <Alert severity="info">Sidik jari tersedia setelah build Android berikutnya selesai.</Alert> : <Stack spacing={2}>
+          <Typography variant="body2">SHA-256 upload key: <code style={{ wordBreak: 'break-all' }}>{app.signingSha256}</code></Typography>
+          <Typography variant="body2">Simpan sebagai <code>https://{host}/.well-known/assetlinks.json</code> agar link ke situs Anda langsung terbuka di aplikasi (aktifkan juga “Deep linking”). Bila memakai Play App Signing, tambahkan juga SHA-256 “App signing key” dari Play Console ke array.</Typography>
+          <TextField multiline value={json} InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: 12 } }} />
+          <Button onClick={() => navigator.clipboard?.writeText(json)}>Salin</Button>
+        </Stack>}
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Tutup</Button></DialogActions>
+    </Dialog>
+  );
+}
+
+/** Sertifikat iOS: .p12 + provisioning profile untuk IPA bertanda tangan */
+export function IosSigningDialog({ app, onClose }) {
+  const [st, setSt] = useState(null);
+  const [p12, setP12] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [pass, setPass] = useState('');
+  const [msg, setMsg] = useState(null);
+  useEffect(() => {
+    if (!app) return;
+    setP12(null); setProfile(null); setPass(''); setMsg(null);
+    api.get(`/api/apps/${app.id}/ios-signing`).then(setSt).catch(() => setSt({ configured: false }));
+  }, [app]);
+  async function save() {
+    try {
+      const fd = new FormData();
+      fd.append('p12', p12); fd.append('profile', profile); fd.append('password', pass);
+      const r = await api.post(`/api/apps/${app.id}/ios-signing`, fd);
+      setSt({ configured: true, teamId: r.teamId });
+      setMsg({ type: 'success', text: `Tersimpan (Team ${r.teamId}, metode ${r.method}). Build iOS berikutnya menghasilkan IPA bertanda tangan.` });
+    } catch (e) { setMsg({ type: 'error', text: e.message }); }
+  }
+  return (
+    <Dialog open={!!app} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Sertifikat iOS — {app?.packageName}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {st?.configured ? <Alert severity="success" action={<Button color="inherit" onClick={async () => { await api.del(`/api/apps/${app.id}/ios-signing`); setSt({ configured: false }); }}>Hapus</Button>}>Sertifikat aktif (Team {st.teamId}).</Alert>
+            : <Alert severity="info">Butuh Apple Developer Program. Buat sertifikat “Apple Distribution” (ekspor .p12 dari Keychain) dan provisioning profile App Store/Ad Hoc untuk bundle ID <b>{app?.packageName}</b>.</Alert>}
+          <FileDrop accept=".p12,.pfx" file={p12} onFile={setP12} label="Sertifikat .p12" />
+          <TextField type="password" label="Password .p12" value={pass} onChange={(e) => setPass(e.target.value)} />
+          <FileDrop accept=".mobileprovision" file={profile} onFile={setProfile} label="Provisioning profile (.mobileprovision)" />
+          <Button variant="contained" disabled={!p12 || !profile} onClick={save}>Simpan terenkripsi</Button>
+          {msg && <Alert severity={msg.type}>{msg.text}</Alert>}
+          <Typography variant="caption" color="text.secondary">Unggah IPA ke App Store Connect lewat aplikasi Transporter (Mac) atau proyek Xcode yang ikut diunduh.</Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Tutup</Button></DialogActions>
+    </Dialog>
+  );
+}

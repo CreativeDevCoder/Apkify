@@ -1,6 +1,6 @@
-# Apkify — Website/ZIP/HTML ke APK & AAB (adopsi freewebtoapk.com)
+# Apkify — Website/ZIP/HTML ke Android, iOS, Windows, macOS & Linux
 
-Platform gratis untuk mengubah **website, ZIP (hasil build React/Vite/Vue), atau HTML** menjadi aplikasi Android **APK + AAB** bertanda tangan, siap Google Play — **tanpa VPS**.
+Platform gratis untuk mengubah **website, ZIP (hasil build React/Vite/Vue), atau HTML** menjadi **APK + AAB (Android), IPA + proyek Xcode (iOS), .exe + .msi (Windows), .dmg (macOS), .AppImage + .deb (Linux)** — **tanpa VPS**, dibangun paralel di GitHub Actions.
 
 | Lapisan | Teknologi | Biaya |
 |---|---|---|
@@ -8,7 +8,7 @@ Platform gratis untuk mengubah **website, ZIP (hasil build React/Vite/Vue), atau
 | API | **Cloudflare Workers** (JS) | Gratis (100rb req/hari) |
 | Database | **Firebase Realtime Database** | Spark (gratis) |
 | Login | **Firebase Auth**: Email/Password, Google, GitHub | Gratis |
-| Build Android | **GitHub Actions** (repo publik = menit gratis) | Gratis |
+| Build Android / desktop / iOS | **GitHub Actions** (runner Linux, Windows, macOS — repo publik = menit gratis) | Gratis |
 | Email | **10 penyedia berbeda**, rotasi otomatis | Paket gratis |
 | Penyimpanan file | **10 drive berbeda**, rotasi otomatis | Paket gratis |
 
@@ -42,6 +42,9 @@ Splash kustom + durasi + pratinjau, skema warna Material (utama/gelap/aksen), in
 
 ### Fitur AppMint yang diadopsi (rilis 3)
 AI App Builder (+ opsi backend Supabase), hosting subdomain HTTPS gratis, aplikasi dokumen/audio/video/foto (Media App Maker), Remote Update (pesan, paksa update, konten OTA), keystore sendiri, plugin native lewat JavaScript API, dan tombol dukungan/donasi. *Penjualan dalam aplikasi* tersedia sebagai template katalog + checkout WhatsApp; Google Play Billing untuk barang digital belum didukung.
+
+### Riset pesaing (rilis 4)
+Web-to-APK/AAB: FreeWebToApk, Median.co, WebToNative, WebViewGold, AppMySite, Appy Pie, WebIntoApp, webtoapp.design, Twinr, Natively, MobiLoud, Website 2 APK Builder. Web-to-EXE/desktop: Pake (Tauri), Nativefier/Electron, WebCatalog, PWABuilder (MSIX), WebsiteToApp. Web-to-IPA: Median, WebToNative, WebViewGold, Appy Pie, PWABuilder (eksperimental). Fitur yang diadopsi: multi-platform (exe/dmg/AppImage/ipa), navigasi bawah & FAB, scanner QR, biometrik, in-app purchase, in-app review, shortcut, share target, penyimpanan native, FCM, Android TV, CSS/JS kustom, aturan link, App Links, analitik, isi otomatis dari website, dan pratinjau langsung.
 
 ## 2. Arsitektur
 
@@ -133,6 +136,13 @@ Penyedia yang secret-nya belum diisi otomatis dilewati — Anda bisa mulai dari 
 - **Formulir kontak:** isi `ADMIN_EMAIL` di `wrangler.toml` (pesan juga tersimpan di Admin → Pesan kontak).
 - **Aplikasi pendamping:** build situs Apkify Anda sendiri lewat Apkify (sumber Website), lalu isi `VITE_COMPANION_APK_URL` (link unduh APK dari halaman build) atau `VITE_COMPANION_PLAY_URL`.
 - **Rules RTDB:** tempel ulang `database.rules.json` (ada indeks baru untuk posts, market, messages).
+
+### A4. Fitur rilis 4 (multi-platform & plugin native)
+- Workflow baru: `.github/workflows/build-desktop.yml` (Tauri 2: Windows/macOS/Linux) dan `build-ios.yml` (XcodeGen + Xcode di macOS). Memakai secrets yang sama (`API_BASE`, `BUILDER_SECRET`). Nama workflow bisa diubah lewat `GITHUB_DESKTOP_WORKFLOW` / `GITHUB_IOS_WORKFLOW`.
+- **Desktop** belum bertanda tangan kode (SmartScreen/Gatekeeper akan bertanya). **iOS** tanpa sertifikat menghasilkan IPA unsigned; unggah `.p12` + `.mobileprovision` di Studio → menu ⋮ → Sertifikat iOS untuk IPA siap App Store.
+- **FCM:** unggah `google-services.json` di Plugin native (package harus sama). **Play Billing:** verifikasi token pembelian di server Anda.
+- **App Links:** sidik jari SHA-256 disimpan otomatis setiap build Android; salin `assetlinks.json` dari Studio → ⋮ → App Links.
+- Kuota runner: repo publik gratis; build macOS/Windows lebih lama (± 10–25 menit untuk build pertama, lebih cepat setelah cache Rust terisi).
 
 ### A3. Fitur rilis 3
 - **Hosting subdomain:** isi `HOSTING_DOMAIN` (mis. `apps.domainanda.com`) di `wrangler.toml`, buat DNS wildcard `*.apps` (proxied/oranye) ke domain Anda, dan aktifkan route `*.apps.domainanda.com/*` ke Worker. File situs disimpan di R2.

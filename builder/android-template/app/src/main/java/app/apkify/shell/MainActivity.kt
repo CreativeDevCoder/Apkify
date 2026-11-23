@@ -52,6 +52,13 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import android.content.res.ColorStateList
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -67,6 +74,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var assetLoader: WebViewAssetLoader
     private val encrypted by lazy { EncryptedAssets(this) }
+    val native by lazy { Native(this) }
+    private var pendingShare: String? = null
+    private var bottomNav: BottomNavigationView? = null
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingGeo: Pair<String, GeolocationPermissions.Callback>? = null
@@ -93,6 +103,8 @@ class MainActivity : AppCompatActivity() {
         pendingGeo?.let { (origin, cb) -> cb.invoke(origin, granted, false) }
         pendingGeo = null
     }
+
+    private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val mediaPerm = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         val req = pendingPermission ?: return@registerForActivityResult
@@ -132,6 +144,11 @@ class MainActivity : AppCompatActivity() {
 
         if (cfg.admob) Ads.init(this, findViewById<FrameLayout>(R.id.adContainer), cfg)
         if (cfg.onesignal) Push.requestPermission()
+        if (cfg.fcm && Build.VERSION.SDK_INT >= 33 && !has(Manifest.permission.POST_NOTIFICATIONS)) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+        setupBottomNav()
+        setupFab()
+        setupShortcuts()
+        Remote.ping(this)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -156,9 +173,95 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        // URL dari deep link (domain situs) atau notifikasi push
-        val url = intent?.data?.toString() ?: return
-        if (url.startsWith("http")) web.loadUrl(url)
+        intent ?: return
+        // Share target: teks/link dibagikan dari aplikasi lain -> event 'apkifyshare' di halaman
+        if (cfg.shareTarget && intent.action == Intent.ACTION_SEND) {
+            val text = listOfNotNull(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getStringExtra(Intent.EXTRA_TEXT)).joinToString("\n")
+            if (text.isNotBlank()) { pendingShare = text; web.evaluateJavascript(Scripts.shareEvent(text), null) }
+            return
+        }
+        // URL dari deep link, shortcut, atau notifikasi push
+        val url = intent.data?.toString() ?: return
+        if (url.startsWith("http") || url.startsWith("https://$ASSET_HOST")) web.loadUrl(url)
+    }
+
+    /** Dipanggil plugin native untuk mengirim hasil ke JS */
+    fun jsCallback(id: String, json: String) = runOnUiThread {
+        if (id == "fab") {
+            // hasil scan dari tombol mengambang: URL dibuka, teks lain dikirim sebagai event 'apkifyscan'
+            val r = runCatching { JSONObject(json) }.getOrNull() ?: return@runOnUiThread
+            val v = r.optString("value")
+            if (!r.optBoolean("ok")) return@runOnUiThread
+            if (v.startsWith("http")) { if (!handleUrl(Uri.parse(v), true)) web.loadUrl(v) }
+            else web.evaluateJavascript("document.dispatchEvent(new CustomEvent('apkifyscan', { detail: { value: ${JSONObject.quote(v)} } }))", null)
+            return@runOnUiThread
+        }
+        web.evaluateJavascript("window.__apkifyCb && window.__apkifyCb(${JSONObject.quote(id)}, $json)", null)
+    }
+
+    private fun navIcon(name: String): Int {
+        val res = resources.getIdentifier("ic_nav_$name", "drawable", packageName)
+        return if (res != 0) res else R.drawable.ic_nav_home
+    }
+
+    // ---------- Navigasi bawah (maks. 5 tab) ----------
+    private fun setupBottomNav() {
+        if (!cfg.bottomNav || cfg.navItems.size < 2) return
+        val nav = findViewById<BottomNavigationView>(R.id.bottomNav)
+        cfg.navItems.take(5).forEachIndexed { i, item -> nav.menu.add(0, i, i, item.label).setIcon(navIcon(item.icon)) }
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        val tint = ColorStateList(states, intArrayOf(parse(cfg.primary), Color.GRAY))
+        nav.itemIconTintList = tint
+        nav.itemTextColor = tint
+        nav.visibility = View.VISIBLE
+        nav.setOnItemSelectedListener { item ->
+            val target = cfg.resolve(cfg.navItems[item.itemId].url)
+            if (web.url != target) web.loadUrl(target)
+            true
+        }
+        nav.setOnItemReselectedListener { item -> web.loadUrl(cfg.resolve(cfg.navItems[item.itemId].url)) }
+        bottomNav = nav
+    }
+
+    private fun syncBottomNav(url: String) {
+        val nav = bottomNav ?: return
+        // tab dengan URL terpanjang yang menjadi awalan URL saat ini
+        val best = cfg.navItems.withIndex().filter { url.startsWith(cfg.resolve(it.value.url).trimEnd('/')) }.maxByOrNull { cfg.resolve(it.value.url).length } ?: return
+        if (nav.selectedItemId != best.index) nav.menu.findItem(best.index)?.isChecked = true
+    }
+
+    // ---------- Tombol mengambang ----------
+    private fun setupFab() {
+        if (!cfg.fab) return
+        val fab = findViewById<FloatingActionButton>(R.id.fab)
+        fab.setImageResource(navIcon(cfg.fabIcon))
+        fab.backgroundTintList = ColorStateList.valueOf(parse(cfg.accent))
+        fab.imageTintList = ColorStateList.valueOf(Color.WHITE)
+        fab.visibility = View.VISIBLE
+        fab.setOnClickListener {
+            when (cfg.fabAction) {
+                "share" -> shareText(web.title.orEmpty() + "\n" + web.url.orEmpty())
+                "top" -> web.evaluateJavascript("window.scrollTo({top:0,behavior:'smooth'})", null)
+                "scan" -> native.handle("scanQR", JSONObject(), "fab")
+                else -> {
+                    val u = cfg.resolve(cfg.fabUrl)
+                    if (!handleUrl(Uri.parse(u), true)) web.loadUrl(u)
+                }
+            }
+        }
+    }
+
+    // ---------- Shortcut ikon (tekan lama ikon aplikasi) ----------
+    private fun setupShortcuts() {
+        if (!cfg.shortcutsOn || cfg.shortcuts.isEmpty()) return
+        runCatching {
+            val list = cfg.shortcuts.take(4).mapIndexed { i, (label, u) ->
+                ShortcutInfoCompat.Builder(this, "s$i").setShortLabel(label.take(25))
+                    .setIcon(IconCompat.createWithResource(this, R.mipmap.ic_launcher))
+                    .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse(cfg.resolve(u)), this, MainActivity::class.java)).build()
+            }
+            ShortcutManagerCompat.setDynamicShortcuts(this, list)
+        }
     }
 
     // ---------- Status bar & edge-to-edge (wajib di targetSdk 35+) ----------
@@ -322,6 +425,9 @@ class MainActivity : AppCompatActivity() {
                 showingOffline = url == errorPage
                 if (!docStartScript) view.evaluateJavascript(Scripts.apiShim(cfg), null)
                 if (!cfg.textSelection) view.evaluateJavascript(Scripts.NO_SELECT, null)
+                if (!showingOffline && (cfg.customCss.isNotBlank() || cfg.customJs.isNotBlank())) view.evaluateJavascript(Scripts.custom(cfg), null)
+                if (!showingOffline) syncBottomNav(url)
+                pendingShare?.let { t -> pendingShare = null; view.evaluateJavascript(Scripts.shareEvent(t), null) }
                 if (cfg.tawkPropertyId.isNotBlank() && !showingOffline) view.evaluateJavascript(Scripts.tawk(cfg.tawkPropertyId, cfg.tawkWidgetId), null)
                 CookieManager.getInstance().flush()
             }
@@ -446,7 +552,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** true = ditangani di luar WebView */
-    private fun handleUrl(uri: Uri, mainFrame: Boolean): Boolean {
+    fun handleUrl(uri: Uri, mainFrame: Boolean): Boolean {
+        val s = uri.toString()
+        // Aturan link kustom (regex) didahulukan
+        for (rule in cfg.linkRules) {
+            if (rule.regex.containsMatchIn(s)) {
+                return when (rule.action) {
+                    "internal" -> false
+                    "block" -> true
+                    else -> { openExternal(uri); true }
+                }
+            }
+        }
         val scheme = uri.scheme?.lowercase().orEmpty()
         if (scheme == "intent") {
             return try {
@@ -509,6 +626,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         Ads.destroy()
+        native.destroy()
         web.destroy()
         super.onDestroy()
     }

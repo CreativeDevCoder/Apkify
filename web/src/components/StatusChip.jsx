@@ -5,6 +5,7 @@ const MAP = {
   building: { label: 'Sedang dibuild', color: 'info' },
   uploading: { label: 'Mengunggah hasil', color: 'info' },
   success: { label: 'Berhasil', color: 'success' },
+  partial: { label: 'Sebagian berhasil', color: 'warning' },
   failed: { label: 'Gagal', color: 'error' }
 };
 
@@ -13,4 +14,4 @@ export default function StatusChip({ status, size = 'small' }) {
   return <Chip size={size} label={m.label} color={m.color} variant={status === 'success' ? 'filled' : 'outlined'} />;
 }
 
-export const FINAL = ['success', 'failed'];
+export const FINAL = ['success', 'failed', 'partial'];

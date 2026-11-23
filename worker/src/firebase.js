@@ -78,6 +78,16 @@ export function rtdb(env) {
     remove: (p) => call('DELETE', p),
     /** Query: { orderBy: 'createdAt', limitToLast: 50, equalTo: 'x' } — butuh .indexOn di rules */
     query: (p, q) => call('GET', p, undefined, q),
+    /** Klaim sekali-pakai berbasis ETag (compare-and-set): true hanya untuk pemanggil pertama */
+    async claim(p) {
+      const token = await saAccessToken(env);
+      const url = `${base}/${p.replace(/^\//, '')}.json`;
+      const g = await fetch(url, { headers: { authorization: `Bearer ${token}`, 'X-Firebase-ETag': 'true' } });
+      if ((await g.json()) === true) return false;
+      const etag = g.headers.get('etag');
+      const put = await fetch(url, { method: 'PUT', headers: { authorization: `Bearer ${token}`, 'if-match': etag, 'content-type': 'application/json' }, body: 'true' });
+      return put.ok;
+    },
     inc: (n = 1) => ({ '.sv': { increment: n } }),
     now: { '.sv': 'timestamp' }
   };

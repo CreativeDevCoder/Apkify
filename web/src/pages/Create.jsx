@@ -22,6 +22,10 @@ import { TEMPLATES } from '../lib/templates';
 import { takeHandoff } from '../lib/handoff';
 import FileDrop from '../components/FileDrop';
 import ColorField from '../components/ColorField';
+import PlatformPicker from '../components/create/PlatformPicker';
+import LivePreview from '../components/create/LivePreview';
+import { BottomNavSection, PluginsSection, CodeSection, DesktopSection } from '../components/create/NativeSections';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { validatePackage, suggestPackage, normalizeUrl, validateUrl, isHex } from '../lib/validators';
 import { generateLetterIcon, loadImage, fileToDataUrl, drawSquare, canvasToBlob } from '../lib/iconGen';
 
@@ -45,8 +49,20 @@ const DEFAULT = {
     showToolbar: false, liveTitle: false, homeButton: false, sideMenu: false,
     hideWebViewUA: false, hideMobileUA: false, desktopMode: false,
     admob: false, interstitial: false, onesignal: false, tawk: false, jsApi: false, supabase: false,
-    remoteUpdate: false, encrypt: true, cacheMode: 'default'
+    remoteUpdate: false, encrypt: true, cacheMode: 'default',
+    bottomNav: false, fab: false, qrScanner: false, biometric: false, inAppReview: false, billing: false,
+    nativeStorage: false, shareTarget: false, shortcuts: false, androidTv: false, analytics: false, fcm: false,
+    customCode: false, linkRules: false
   },
+  platforms: { android: true, windows: false, macos: false, linux: false, ios: false },
+  bottomNav: { items: [{ label: 'Beranda', icon: 'home', url: '/' }, { label: 'Akun', icon: 'user', url: '/akun' }] },
+  fab: { icon: 'chat', action: 'url', url: '' },
+  shortcuts: [],
+  linkRules: [],
+  customCss: '',
+  customJs: '',
+  fcmFileId: '',
+  desktop: { width: 1200, height: 800, resizable: true, fullscreen: false, alwaysOnTop: false, maximized: false },
   sideMenu: { about: '', contactEmail: '', shareText: '', links: [] },
   admob: { appId: '', bannerId: '', interstitialId: '', interstitialEvery: 4 },
   onesignal: { appId: '' },
@@ -136,6 +152,8 @@ export default function Create() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({ label: '', value: 0 });
   const [error, setError] = useState('');
+  const [meta, setMeta] = useState(null);
+  const [metaBusy, setMetaBusy] = useState(false);
   const genCanvas = useRef(null);
 
   useEffect(() => {
@@ -179,7 +197,10 @@ export default function Create() {
         colors: { ...DEFAULT.colors, ...c.colors }, features: { ...DEFAULT.features, ...c.features },
         sideMenu: { ...DEFAULT.sideMenu, ...c.sideMenu }, admob: { ...DEFAULT.admob, ...c.admob },
         tawk: { ...DEFAULT.tawk, ...c.tawk }, supabase: { ...DEFAULT.supabase, ...c.supabase },
-        splash: { ...DEFAULT.splash, ...c.splash }, progress: { ...DEFAULT.progress, ...c.progress }
+        splash: { ...DEFAULT.splash, ...c.splash }, progress: { ...DEFAULT.progress, ...c.progress },
+        platforms: { ...DEFAULT.platforms, ...c.platforms }, bottomNav: { items: c.bottomNav?.items?.length ? c.bottomNav.items : DEFAULT.bottomNav.items },
+        fab: { ...DEFAULT.fab, ...c.fab }, desktop: { ...DEFAULT.desktop, ...c.desktop },
+        shortcuts: c.shortcuts || [], linkRules: c.linkRules || []
       });
       setPkgTouched(true);
       if (c.iconFileId) { setExistingIconId(c.iconFileId); setIconMode('keep'); }
@@ -218,6 +239,37 @@ export default function Create() {
 
   const isLocal = cfg.source.type !== 'url';
   const f = cfg.features;
+  const T = (p) => <Toggle {...p} f={f} set={set} />;
+  const desktopOn = cfg.platforms.windows || cfg.platforms.macos || cfg.platforms.linux;
+
+  /** Isi otomatis dari website: nama, warna tema, ikon (manifest/apple-touch-icon/favicon) */
+  async function autoFill() {
+    setMetaBusy(true);
+    setError('');
+    try {
+      const url = normalizeUrl(cfg.source.url);
+      const m = await api.get(`/api/public/site-meta?url=${encodeURIComponent(url)}`, { auth: false });
+      setMeta(m);
+      setCfg((c) => ({
+        ...c,
+        name: c.name || m.name,
+        colors: m.themeColor ? { ...c.colors, primary: m.themeColor, statusBar: m.themeColor } : c.colors
+      }));
+      const best = m.icons.find((i) => i.size >= 128 && !/\.ico($|\?)/i.test(i.src) && !/\.svg($|\?)/i.test(i.src)) || m.icons.find((i) => !/\.ico($|\?)/i.test(i.src));
+      if (best) {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/public/site-icon?url=${encodeURIComponent(best.src)}`);
+        if (res.ok) {
+          const blob = await res.blob();
+          const img = await loadImage(URL.createObjectURL(blob));
+          if (img.width >= 96) { setIconFile(new File([blob], 'icon.png', { type: blob.type })); setIconMode('upload'); }
+        }
+      }
+    } catch (e) {
+      setError(`Isi otomatis gagal: ${e.message}`);
+    } finally {
+      setMetaBusy(false);
+    }
+  }
 
   const errors = useMemo(() => {
     const e = {};
@@ -241,6 +293,10 @@ export default function Create() {
     if (f.tawk && !cfg.tawk.propertyId.trim()) e.tawk = 'Tawk Property ID wajib diisi';
     if (f.supabase && (!/\.supabase\.co\/?$/.test(cfg.supabase.url) || cfg.supabase.anonKey.length < 20)) e.supabase = 'URL (https://xxx.supabase.co) & anon key Supabase';
     if (iconMode === 'upload' && !iconFile) e.icon = 'Pilih gambar ikon';
+    if (!Object.values(cfg.platforms).some(Boolean)) e.platforms = 'Pilih minimal satu platform';
+    if (f.bottomNav && cfg.bottomNav.items.filter((i) => i.label && i.url).length < 2) e.bottomNav = 'Navigasi bawah butuh minimal 2 tab berisi label & URL';
+    if (f.fab && cfg.fab.action === 'url' && !cfg.fab.url) e.fab = 'Isi URL tombol mengambang';
+    if (f.fcm && !cfg.fcmFileId) e.fcm = 'Unggah google-services.json untuk FCM';
     if (splashMode === 'custom' && !splashFile) e.splash = 'Pilih gambar splash';
     if (errorMode === 'custom' && !errorHtml.trim()) e.errorPage = 'Isi HTML halaman error';
     return e;
@@ -331,11 +387,22 @@ export default function Create() {
           <Tab value="zip" icon={<FolderZipIcon />} iconPosition="start" label="ZIP" />
           <Tab value="html" icon={<CodeIcon />} iconPosition="start" label="HTML" />
         </Tabs>
-        {cfg.source.type === 'url' && (
-          <TextField label="Alamat website" placeholder="https://tokoanda.com" value={cfg.source.url}
-            onChange={(e) => set('source.url', e.target.value)} error={!!cfg.source.url && !!errors.url}
-            helperText={(cfg.source.url && errors.url) || 'Situs harus bisa dibuka di HP. Konten aplikasi selalu mengikuti situs Anda.'} />
-        )}
+        {cfg.source.type === 'url' && (<>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'flex-start' }}>
+            <TextField label="Alamat website" placeholder="https://tokoanda.com" value={cfg.source.url}
+              onChange={(e) => set('source.url', e.target.value)} error={!!cfg.source.url && !!errors.url}
+              helperText={(cfg.source.url && errors.url) || 'Situs harus bisa dibuka di HP. Konten aplikasi selalu mengikuti situs Anda.'} />
+            <Button variant="outlined" startIcon={<AutoFixHighIcon />} disabled={metaBusy || !!errors.url} onClick={autoFill} sx={{ whiteSpace: 'nowrap', minWidth: 170 }}>
+              {metaBusy ? 'Membaca situs…' : 'Isi otomatis'}
+            </Button>
+          </Stack>
+          {meta && (
+            <Alert severity={meta.https ? 'success' : 'warning'} sx={{ mt: 1 }}>
+              Ditemukan: <b>{meta.name || '(tanpa nama)'}</b>{meta.themeColor ? `, warna ${meta.themeColor}` : ''}, {meta.icons.length} ikon{meta.hasManifest ? ', manifest PWA' : ''}.
+              {!meta.https && ' Situs belum HTTPS — matikan opsi “Hanya konten HTTPS” atau pasang SSL.'}
+            </Alert>
+          )}
+        </>)}
         {cfg.source.type === 'zip' && <>
           <FileDrop accept=".zip,application/zip" file={zipFile} onFile={setZipFile} hint={`ZIP berisi index.html di root (mis. folder dist React/Vite). Maks ${MAX_ZIP_MB} MB.`} />
           {cfg.source.fileId && !zipFile && <Alert severity="info" sx={{ mt: 1 }}>ZIP sebelumnya dipakai lagi bila tidak memilih file baru.</Alert>}
@@ -346,6 +413,13 @@ export default function Create() {
             placeholder="<!doctype html><html>…</html>" helperText={`Satu halaman HTML (CSS/JS inline). Maks ${MAX_HTML_KB} KB.`}
             InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }} />
         )}
+      </CardContent></Card>
+
+      {/* PLATFORM */}
+      <Card sx={{ mb: 2 }}><CardContent>
+        <Typography variant="h6" gutterBottom>Platform target</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Satu konfigurasi, banyak platform — semua dibangun paralel di cloud.</Typography>
+        <PlatformPicker value={cfg.platforms} anon={!user || isAnon} onChange={(v) => set('platforms', v)} />
       </CardContent></Card>
 
       {/* 2. IDENTITAS */}
@@ -433,8 +507,30 @@ export default function Create() {
         </TextField>
       </CardContent></Card>
 
+      <Section title="Pratinjau langsung" defaultExpanded>
+        <LivePreview cfg={cfg} html={html} iconPreview={iconPreview} frameBlocked={meta?.frameBlocked} />
+      </Section>
+
       {/* 4. LANJUTAN */}
       <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>4. Pengaturan lanjutan</Typography>
+
+      <Section title="Navigasi bawah & tombol mengambang" chip="baru">
+        <BottomNavSection cfg={cfg} set={set} Toggle={T} />
+      </Section>
+
+      <Section title="Plugin native" chip="baru">
+        <PluginsSection cfg={cfg} set={set} Toggle={T} onFcm={(id) => set('fcmFileId', id)} />
+      </Section>
+
+      <Section title="Kode kustom & aturan link">
+        <CodeSection cfg={cfg} set={set} Toggle={T} />
+      </Section>
+
+      {desktopOn && (
+        <Section title="Jendela desktop (Windows/macOS/Linux)" defaultExpanded>
+          <DesktopSection cfg={cfg} set={set} />
+        </Section>
+      )}
 
       <Section title="Toolbar & menu samping">
         <Grid container>
@@ -534,12 +630,20 @@ export default function Create() {
       <Section title="Developer: JavaScript API, Supabase, Remote Update">
         <Toggle k="jsApi" label="JavaScript APIs (plugin native)" f={f} set={set} />
         {f.jsApi && (
-          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2, fontSize: 12, overflow: 'auto', mt: 0 }}>{`document.addEventListener('apkifyready', () => {
+          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2, fontSize: 12, overflow: 'auto', mt: 0 }}>{`document.addEventListener('apkifyready', async () => {
   Apkify.toast('Halo');          Apkify.vibrate(80);
   Apkify.share('Teks');          Apkify.copy('Teks');
   Apkify.open('https://...');    Apkify.keepScreenOn(true);
   Apkify.device(); Apkify.app(); Apkify.exit();
-});`}</Box>
+  // plugin (aktifkan di "Plugin native"):
+  const { value } = await Apkify.scanQR();
+  const { ok } = await Apkify.biometric('Masuk ke akun');
+  await Apkify.requestReview();
+  const { products } = await Apkify.iap.products(['premium']);
+  const { purchases } = await Apkify.iap.purchase('premium');
+  Apkify.storage.set('k', 'v');  const { token } = await Apkify.getPushToken();
+});
+document.addEventListener('apkifyshare', (e) => console.log(e.detail.text));`}</Box>
         )}
         <Toggle k="supabase" label="Backend Supabase" f={f} set={set} />
         {f.supabase && (

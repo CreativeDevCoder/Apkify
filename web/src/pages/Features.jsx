@@ -3,12 +3,32 @@ import { Container, Typography, Grid, Card, CardContent, Button, Box } from '@mu
 import PageHeader from '../components/PageHeader';
 
 const GROUPS = [
+  ['Platform', [
+    ['Android', 'APK + AAB, Android TV, App Links terverifikasi (assetlinks.json).'],
+    ['iOS', 'IPA + proyek Xcode, dibangun di cloud tanpa Mac; bertanda tangan bila sertifikat diunggah.'],
+    ['Windows', 'Installer .exe (NSIS) dan .msi, ringan berbasis WebView2.'],
+    ['macOS', '.dmg universal (Apple Silicon + Intel).'],
+    ['Linux', '.AppImage dan .deb.']
+  ]],
+  ['Plugin native', [
+    ['Navigasi bawah & FAB', 'Tab bar hingga 5 item dan tombol mengambang (URL, scan, bagikan).'],
+    ['Scanner QR & barcode', 'UI native Google tanpa izin kamera.'],
+    ['Biometrik', 'Sidik jari/Face unlock (Android) dan Face ID (iOS).'],
+    ['Google Play Billing', 'Produk sekali beli & langganan lewat Apkify.iap.'],
+    ['Ulasan dalam aplikasi', 'Dialog rating Google Play.'],
+    ['Push FCM & OneSignal', 'Token FCM untuk server Anda atau OneSignal tanpa server.'],
+    ['Shortcut & share target', 'Menu ikon tekan-lama dan menerima teks/link dari aplikasi lain.'],
+    ['Penyimpanan native & analitik', 'Data bertahan & statistik pengguna aktif harian.'],
+    ['CSS/JS kustom & aturan link', 'Sembunyikan elemen situs di aplikasi, atur link internal/eksternal/blokir dengan regex.']
+  ]],
   ['Sumber konten', [
     ['Website (URL)', 'Konten selalu terbaru mengikuti situs Anda.'],
     ['ZIP offline', 'Hasil build React/Vite/Vue/Angular atau situs statis dibundel ke APK dan berjalan tanpa internet.'],
     ['HTML tempel', 'Satu halaman HTML langsung jadi aplikasi.'],
     ['Template', 'Mulai dari katalog toko, link in bio, kalkulator, kuis, dan lainnya.'],
-    ['AI Studio', 'Jelaskan aplikasi yang Anda mau, AI membuatkan kodenya.']
+    ['AI Studio', 'Jelaskan aplikasi yang Anda mau, AI membuatkan kodenya.'],
+    ['Isi otomatis', 'Nama, warna tema, dan ikon diambil dari website Anda.'],
+    ['Pratinjau langsung', 'Lihat toolbar, navigasi bawah, dan FAB sebelum build.']
   ]],
   ['Tampilan', [
     ['Ikon otomatis atau upload', 'Lengkap semua ukuran mipmap + adaptive icon.'],

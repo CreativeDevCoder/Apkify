@@ -54,4 +54,17 @@ class Bridge(private val activity: MainActivity) {
     }.toString()
 
     @JavascriptInterface fun appInfo(): String = cfg.publicJson()
+
+    /** Panggilan asinkron generik: hasil dikirim ke window.__apkifyCb(id, json) */
+    @JavascriptInterface fun call(cmd: String, args: String, id: String) {
+        val json = runCatching { org.json.JSONObject(args) }.getOrDefault(org.json.JSONObject())
+        activity.runOnUiThread { activity.native.handle(cmd, json, id) }
+    }
+
+    // Penyimpanan native (SharedPreferences) — bertahan walau cache WebView dibersihkan
+    private val store by lazy { activity.getSharedPreferences("apkify_store", android.content.Context.MODE_PRIVATE) }
+    @JavascriptInterface fun storageGet(key: String): String? = if (cfg.nativeStorage) store.getString(key.take(200), null) else null
+    @JavascriptInterface fun storageSet(key: String, value: String) { if (cfg.nativeStorage && value.length <= 100_000) store.edit().putString(key.take(200), value).apply() }
+    @JavascriptInterface fun storageRemove(key: String) { if (cfg.nativeStorage) store.edit().remove(key.take(200)).apply() }
+    @JavascriptInterface fun storageKeys(): String = if (cfg.nativeStorage) org.json.JSONArray(store.all.keys.toList()).toString() else "[]"
 }

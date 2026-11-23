@@ -88,7 +88,7 @@ export default function App() {
           <Route path="/terms" element={<Legal type="terms" />} />
           <Route path="/hosting" element={<Hosting />} />
           <Route path="/media-app" element={<MediaApp />} />
-          {['/website-to-app', '/convert-website-to-mobile-app', '/html-to-app', '/ai-website-to-app'].map((p) => <Route key={p} path={p} element={<Landing />} />)}
+          {['/website-to-app', '/convert-website-to-mobile-app', '/html-to-app', '/ai-website-to-app', '/website-to-exe', '/website-to-ipa', '/website-to-desktop-app'].map((p) => <Route key={p} path={p} element={<Landing />} />)}
           <Route path="/admin" element={<ProtectedRoute admin><Admin /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

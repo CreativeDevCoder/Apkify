@@ -30,8 +30,15 @@ export const FEATURE_DEFAULTS = {
   showToolbar: false, liveTitle: false, homeButton: false, sideMenu: false,
   hideWebViewUA: false, hideMobileUA: false, desktopMode: false,
   admob: false, interstitial: false, onesignal: false, tawk: false, jsApi: false, supabase: false,
-  remoteUpdate: false, encrypt: true
+  remoteUpdate: false, encrypt: true,
+  // plugin native (rilis 4)
+  bottomNav: false, fab: false, qrScanner: false, biometric: false, inAppReview: false, billing: false,
+  nativeStorage: false, shareTarget: false, shortcuts: false, androidTv: false, analytics: false, fcm: false,
+  customCode: false, linkRules: false
 };
+
+export const NAV_ICONS = ['home', 'search', 'cart', 'user', 'heart', 'bell', 'apps', 'menu', 'info', 'chat', 'star', 'list', 'place', 'phone', 'play', 'qr', 'share', 'up'];
+export const PLATFORMS = ['android', 'windows', 'macos', 'linux', 'ios'];
 
 export function sanitizeConfig(c) {
   if (!c || typeof c !== 'object') throw new HttpError(400, 'Konfigurasi kosong');
@@ -83,6 +90,40 @@ export function sanitizeConfig(c) {
       .filter((l) => l.label && l.url)
   };
 
+  // ---------- Rilis 4: multi-platform & plugin native ----------
+  const p = c.platforms || {};
+  const platforms = Object.fromEntries(PLATFORMS.map((k) => [k, k === 'android' ? p.android !== false : p[k] === true]));
+  if (!Object.values(platforms).some(Boolean)) throw new HttpError(400, 'Pilih minimal satu platform');
+  const icon = (v, d) => (NAV_ICONS.includes(v) ? v : d);
+  // URL absolut (http/https) atau path relatif terhadap halaman awal (mis. /keranjang, #/profil, about.html)
+  const navUrl = (v) => { const s = str(v, 500); return url(s) || (/^[#/\w][\w\-./#?=&%~+:]*$/.test(s) && !/^[a-z]+:/i.test(s) ? s : ''); };
+  const bottomNav = {
+    items: (Array.isArray(c.bottomNav?.items) ? c.bottomNav.items : []).slice(0, 5)
+      .map((it) => ({ label: str(it?.label, 16), icon: icon(it?.icon, 'home'), url: navUrl(it?.url) }))
+      .filter((it) => it.label && it.url)
+  };
+  if (features.bottomNav && bottomNav.items.length < 2) throw new HttpError(400, 'Navigasi bawah butuh minimal 2 item (label + URL)');
+  const fab = {
+    icon: icon(c.fab?.icon, 'chat'),
+    action: ['url', 'share', 'scan', 'top'].includes(c.fab?.action) ? c.fab.action : 'url',
+    url: navUrl(c.fab?.url)
+  };
+  if (features.fab && fab.action === 'url' && !fab.url) throw new HttpError(400, 'Tombol mengambang butuh URL');
+  if (features.fab && fab.action === 'scan') features.qrScanner = true;
+  const shortcuts = (Array.isArray(c.shortcuts) ? c.shortcuts : []).slice(0, 4)
+    .map((x) => ({ label: str(x?.label, 24), url: navUrl(x?.url) })).filter((x) => x.label && x.url);
+  const linkRules = (Array.isArray(c.linkRules) ? c.linkRules : []).slice(0, 20)
+    .map((x) => ({ pattern: str(x?.pattern, 200), action: ['internal', 'external', 'block'].includes(x?.action) ? x.action : 'external' }))
+    .filter((x) => x.pattern);
+  for (const rule of linkRules) { try { new RegExp(rule.pattern); } catch { throw new HttpError(400, `Pola link tidak valid: ${rule.pattern}`); } }
+  const d = c.desktop || {};
+  const desktop = {
+    width: Math.min(3840, Math.max(400, Math.round(Number(d.width) || 1200))),
+    height: Math.min(2160, Math.max(300, Math.round(Number(d.height) || 800))),
+    resizable: d.resizable !== false, fullscreen: d.fullscreen === true, alwaysOnTop: d.alwaysOnTop === true,
+    maximized: d.maximized === true
+  };
+
   const durationMs = Math.min(5000, Math.max(0, Math.round(Number(c.splash?.durationMs) || 0)));
   return {
     name, packageName, versionName, versionCodeOverride, source,
@@ -98,6 +139,10 @@ export function sanitizeConfig(c) {
     errorPageFileId: str(c.errorPageFileId, 40),
     ...(typeof c.errorPageHtml === 'string' && c.errorPageHtml.trim() ? { errorPageHtml: c.errorPageHtml.slice(0, 100 * 1024) } : {}),
     features, admob, onesignal, tawk, supabase, sideMenu,
+    platforms, bottomNav, fab, shortcuts, linkRules, desktop,
+    customCss: features.customCode ? String(c.customCss || '').slice(0, 20_000) : '',
+    customJs: features.customCode ? String(c.customJs || '').slice(0, 50_000) : '',
+    fcmFileId: features.fcm ? str(c.fcmFileId, 40) : '',
     userAgentSuffix: str(c.userAgentSuffix, 40).replace(/[^\w.\-/ ]/g, '')
   };
 }
