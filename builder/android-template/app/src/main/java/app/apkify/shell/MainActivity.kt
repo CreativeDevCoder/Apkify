@@ -622,7 +622,7 @@ class MainActivity : AppCompatActivity() {
      * "Allow Cross-Origin" untuk konten lokal: permintaan GET ke API luar diambil secara native
      * lalu dikembalikan dengan header CORS terbuka (berjalan di thread latar WebView).
      */
-    private fun corsProxy(request: WebResourceRequest): WebResourceResponse? = try {
+    private fun corsProxy(request: WebResourceRequest): WebResourceResponse? { return try {
         val conn = (URL(request.url.toString()).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000; readTimeout = 30_000
             request.requestHeaders.forEach { (k, v) -> if (!k.equals("Origin", true) && !k.equals("Referer", true)) setRequestProperty(k, v) }
@@ -637,7 +637,7 @@ class MainActivity : AppCompatActivity() {
             mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Headers" to "*"), stream)
     } catch (e: Exception) {
         null
-    }
+    } }
 
     /** true = ditangani di luar WebView */
     fun handleUrl(uri: Uri, mainFrame: Boolean): Boolean {

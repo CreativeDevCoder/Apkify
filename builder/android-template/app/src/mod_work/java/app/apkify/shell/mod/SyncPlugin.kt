@@ -55,8 +55,9 @@ class SyncPlugin(host: MainActivity) : Plugin(host) {
 }
 
 class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
-    override fun doWork(): Result = try {
+    override fun doWork(): Result {
         val url = inputData.getString("url") ?: return Result.failure()
+        return try {
         val c = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000; readTimeout = 30_000
             setRequestProperty("X-Apkify-Sync", "1")
@@ -71,5 +72,6 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
         }
         if (code in 500..599) Result.retry() else Result.success()
     } catch (e: Exception) { Result.retry() }
+    }
 }
 

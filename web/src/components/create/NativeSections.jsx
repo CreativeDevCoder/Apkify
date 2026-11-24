@@ -89,7 +89,7 @@ export function PluginsSection({ cfg, set, Toggle, onFcm }) {
             <TextField label="URL" value={r.url} onChange={(e) => up({ url: e.target.value })} helperText={urlHelp} />
           </>} />
       )}
-      {f.fcm && (
+      {(f.fcm || f.firebaseAnalytics || f.crashlytics) && (
         <Box sx={{ mt: 1 }}>
           <FileDrop accept=".json,application/json" label={cfg.fcmFileId ? 'google-services.json tersimpan — klik untuk ganti' : 'Unggah google-services.json'}
             hint="Firebase Console → Project settings → Aplikasi Android dengan package yang sama"

@@ -47,7 +47,7 @@ class NotifyPlugin(host: MainActivity) : Plugin(host) {
     }
 
     private fun permission(cb: (Boolean) -> Unit) =
-        if (Build.VERSION.SDK_INT >= 33) host.requestPerms(listOf(Manifest.permission.POST_NOTIFICATIONS), cb) else cb(NotificationManagerCompat.from(host).areNotificationsEnabled())
+        if (Build.VERSION.SDK_INT >= 33) host.requestPerms(listOf(Manifest.permission.POST_NOTIFICATIONS), cb = cb) else cb(NotificationManagerCompat.from(host).areNotificationsEnabled())
 }
 
 /** Logika notifikasi yang juga dipakai receiver (tanpa Activity). */

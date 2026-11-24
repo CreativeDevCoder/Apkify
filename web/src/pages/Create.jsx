@@ -25,6 +25,8 @@ import ColorField from '../components/ColorField';
 import PlatformPicker from '../components/create/PlatformPicker';
 import LivePreview from '../components/create/LivePreview';
 import { BottomNavSection, PluginsSection, CodeSection, DesktopSection } from '../components/create/NativeSections';
+import { NativePluginsSection, AdsSection, NATIVE_GROUPS } from '../components/create/NativePlugins';
+import JSZip from 'jszip';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { validatePackage, suggestPackage, normalizeUrl, validateUrl, isHex } from '../lib/validators';
 import { generateLetterIcon, loadImage, fileToDataUrl, drawSquare, canvasToBlob } from '../lib/iconGen';
@@ -52,8 +54,27 @@ const DEFAULT = {
     remoteUpdate: false, encrypt: true, cacheMode: 'default',
     bottomNav: false, fab: false, qrScanner: false, biometric: false, inAppReview: false, billing: false,
     nativeStorage: false, shareTarget: false, shortcuts: false, androidTv: false, analytics: false, fcm: false,
-    customCode: false, linkRules: false
+    customCode: false, linkRules: false,
+    ads: false,
+    ...Object.fromEntries(NATIVE_GROUPS.flatMap(([, l]) => l).map(([k]) => [k, false]))
   },
+  ads: {
+    network: 'admob', banner: 'bottom', bannerStyle: 'adaptive', interstitial: false, interstitialEvery: 4, minGapSec: 45, appOpen: false, mediation: [],
+    admob: { appId: '', bannerId: '', interstitialId: '', rewardedId: '', rewardedInterstitialId: '', appOpenId: '', nativeId: '' },
+    applovin: { sdkKey: '', bannerId: '', interstitialId: '', rewardedId: '', appOpenId: '' },
+    unity: { gameId: '', bannerId: '', interstitialId: '', rewardedId: '', testMode: false },
+    meta: { bannerId: '', interstitialId: '', rewardedId: '' },
+    startio: { appId: '', testMode: false }
+  },
+  google: { webClientId: '' },
+  facebook: { appId: '', clientToken: '' },
+  appLock: { timeoutSec: 30 },
+  widget: { title: '', text: '', url: '/' },
+  tile: { label: '', url: '/', icon: 'apps' },
+  kiosk: { autoStart: false, launcher: false },
+  integrity: { cloudProjectNumber: '' },
+  nfc: { aids: [] },
+  altIconFileIds: [],
   platforms: { android: true, windows: false, macos: false, linux: false, ios: false },
   bottomNav: { items: [{ label: 'Beranda', icon: 'home', url: '/' }, { label: 'Akun', icon: 'user', url: '/akun' }] },
   fab: { icon: 'chat', action: 'url', url: '' },
@@ -116,6 +137,22 @@ function Toggle({ k, label, hint, f, set }) {
   );
 }
 
+/** Konfigurasi iklan lama (admob + interstitial) -> format multi-jaringan rilis 5 */
+function migrateAds(c) {
+  const d = structuredClone(DEFAULT.ads);
+  const a = c.ads || {};
+  const out = { ...d, ...a };
+  for (const n of ['admob', 'applovin', 'unity', 'meta', 'startio']) out[n] = { ...d[n], ...(a[n] || {}) };
+  if (!a.network && c.features?.admob) {
+    out.network = 'admob';
+    out.admob = { ...out.admob, appId: c.admob?.appId || '', bannerId: c.admob?.bannerId || '', interstitialId: c.admob?.interstitialId || '' };
+    out.interstitial = !!c.features?.interstitial;
+    out.interstitialEvery = c.admob?.interstitialEvery || 4;
+  }
+  out.mediation = out.mediation || [];
+  return out;
+}
+
 function Section({ title, children, defaultExpanded = false, chip }) {
   return (
     <Accordion defaultExpanded={defaultExpanded} disableGutters sx={{ mb: 1.5, border: 1, borderColor: 'divider', '&:before': { display: 'none' }, borderRadius: 2 }}>
@@ -139,6 +176,28 @@ export default function Create() {
   }));
   const [pkgTouched, setPkgTouched] = useState(false);
   const [zipFile, setZipFile] = useState(null);
+  const [zipInfo, setZipInfo] = useState(null);
+  // Periksa isi ZIP di browser: hasil build (index.html) atau kode sumber (package.json)?
+  useEffect(() => {
+    setZipInfo(null);
+    if (!zipFile) return;
+    let live = true;
+    JSZip.loadAsync(zipFile).then((z) => {
+      const names = Object.keys(z.files).filter((n) => !n.startsWith('__MACOSX'));
+      const depth = (n) => n.replace(/\/$/, '').split('/').length;
+      const top = (n) => names.some((x) => x.endsWith(n) && depth(x) <= 2 && !x.includes('node_modules/'));
+      const nm = names.some((n) => n.includes('node_modules/'));
+      let info;
+      if (top('package.json') && names.some((n) => /(^|\/)src\/main\.(j|t)sx?$|vite\.config|angular\.json|svelte\.config/.test(n)))
+        info = { type: 'success', text: `Kode sumber terdeteksi — Apkify menjalankan "npm install" + "npm run build" otomatis di cloud${names.some((n) => n.endsWith('vite.config.js') || n.endsWith('vite.config.ts')) ? ' (Vite, BrowserRouter didukung)' : ''}.` };
+      else if (top('index.html')) info = { type: 'success', text: 'ZIP siap pakai: index.html ditemukan.' };
+      else if (top('package.json')) info = { type: 'info', text: 'package.json ditemukan — proyek akan di-build dengan "npm run build".' };
+      else info = { type: 'warning', text: 'index.html atau package.json tidak ditemukan di folder utama ZIP.' };
+      if (nm) info = { type: 'warning', text: `${info.text} Hapus folder node_modules dari ZIP agar ukurannya kecil (dipasang ulang otomatis).` };
+      if (live) setZipInfo(info);
+    }).catch(() => live && setZipInfo({ type: 'error', text: 'File ZIP tidak valid.' }));
+    return () => { live = false; };
+  }, [zipFile]);
   const [html, setHtml] = useState('');
   const [iconMode, setIconMode] = useState('generate');
   const [iconFile, setIconFile] = useState(null);
@@ -194,13 +253,17 @@ export default function Create() {
       const c = a.config;
       setCfg({
         ...structuredClone(DEFAULT), ...c, versionCodeOverride: '',
-        colors: { ...DEFAULT.colors, ...c.colors }, features: { ...DEFAULT.features, ...c.features },
+        colors: { ...DEFAULT.colors, ...c.colors }, features: { ...DEFAULT.features, ...c.features, ads: !!(c.features?.ads || c.features?.admob) },
         sideMenu: { ...DEFAULT.sideMenu, ...c.sideMenu }, admob: { ...DEFAULT.admob, ...c.admob },
         tawk: { ...DEFAULT.tawk, ...c.tawk }, supabase: { ...DEFAULT.supabase, ...c.supabase },
         splash: { ...DEFAULT.splash, ...c.splash }, progress: { ...DEFAULT.progress, ...c.progress },
         platforms: { ...DEFAULT.platforms, ...c.platforms }, bottomNav: { items: c.bottomNav?.items?.length ? c.bottomNav.items : DEFAULT.bottomNav.items },
         fab: { ...DEFAULT.fab, ...c.fab }, desktop: { ...DEFAULT.desktop, ...c.desktop },
-        shortcuts: c.shortcuts || [], linkRules: c.linkRules || []
+        shortcuts: c.shortcuts || [], linkRules: c.linkRules || [],
+        ads: migrateAds(c), google: { ...DEFAULT.google, ...c.google }, facebook: { ...DEFAULT.facebook, ...c.facebook },
+        appLock: { ...DEFAULT.appLock, ...c.appLock }, widget: { ...DEFAULT.widget, ...c.widget }, tile: { ...DEFAULT.tile, ...c.tile },
+        kiosk: { ...DEFAULT.kiosk, ...c.kiosk }, integrity: { ...DEFAULT.integrity, ...c.integrity }, nfc: { aids: c.nfc?.aids || [] },
+        altIconFileIds: c.altIconFileIds || []
       });
       setPkgTouched(true);
       if (c.iconFileId) { setExistingIconId(c.iconFileId); setIconMode('keep'); }
@@ -287,8 +350,17 @@ export default function Create() {
     if (cfg.source.type === 'zip' && !zipFile && !cfg.source.fileId) e.zip = 'Pilih file ZIP';
     if (cfg.source.type === 'html' && !html.trim() && !cfg.source.fileId) e.html = 'Tempel kode HTML';
     if (Object.values(cfg.colors).some((c) => !isHex(c))) e.colors = 'Warna tidak valid';
-    if ((f.admob || f.interstitial) && !/^ca-app-pub-\d+~\d+$/.test(cfg.admob.appId)) e.admob = 'AdMob App ID: ca-app-pub-xxx~yyy';
-    if (f.interstitial && !/^ca-app-pub-\d+\/\d+$/.test(cfg.admob.interstitialId)) e.interstitial = 'Interstitial Ad Unit ID: ca-app-pub-xxx/yyy';
+    if (f.ads) {
+      const a = cfg.ads, n = a.network;
+      if (n === 'admob' && !/^ca-app-pub-\d+~\d+$/.test(a.admob.appId)) e.ads = 'AdMob App ID: ca-app-pub-xxx~yyy';
+      if (n === 'applovin' && a.applovin.sdkKey.length < 20) e.ads = 'Isi SDK key AppLovin';
+      if (n === 'unity' && !/^\d{5,12}$/.test(a.unity.gameId)) e.ads = 'Unity Game ID berupa angka';
+      if (n === 'meta' && !Object.values(a.meta).some(Boolean)) e.ads = 'Isi minimal satu Placement ID Meta';
+      if (n === 'startio' && !/^\d{6,12}$/.test(a.startio.appId)) e.ads = 'Start.io App ID berupa angka';
+    }
+    if (f.googleSignIn && !/\.apps\.googleusercontent\.com$/.test(cfg.google.webClientId)) e.native = 'Login Google: isi Web client ID';
+    if (f.facebookLogin && (!/^\d{6,20}$/.test(cfg.facebook.appId) || !/^[a-f0-9]{32}$/i.test(cfg.facebook.clientToken))) e.native = 'Login Facebook: App ID & Client Token (32 karakter hex)';
+    if (f.altIcons && !cfg.altIconFileIds.length) e.native = 'Unggah minimal satu ikon alternatif';
     if (f.onesignal && !/^[0-9a-f-]{36}$/i.test(cfg.onesignal.appId)) e.onesignal = 'OneSignal App ID (UUID)';
     if (f.tawk && !cfg.tawk.propertyId.trim()) e.tawk = 'Tawk Property ID wajib diisi';
     if (f.supabase && (!/\.supabase\.co\/?$/.test(cfg.supabase.url) || cfg.supabase.anonKey.length < 20)) e.supabase = 'URL (https://xxx.supabase.co) & anon key Supabase';
@@ -296,7 +368,7 @@ export default function Create() {
     if (!Object.values(cfg.platforms).some(Boolean)) e.platforms = 'Pilih minimal satu platform';
     if (f.bottomNav && cfg.bottomNav.items.filter((i) => i.label && i.url).length < 2) e.bottomNav = 'Navigasi bawah butuh minimal 2 tab berisi label & URL';
     if (f.fab && cfg.fab.action === 'url' && !cfg.fab.url) e.fab = 'Isi URL tombol mengambang';
-    if (f.fcm && !cfg.fcmFileId) e.fcm = 'Unggah google-services.json untuk FCM';
+    if ((f.fcm || f.firebaseAnalytics || f.crashlytics) && !cfg.fcmFileId) e.fcm = 'Unggah google-services.json (Firebase)';
     if (splashMode === 'custom' && !splashFile) e.splash = 'Pilih gambar splash';
     if (errorMode === 'custom' && !errorHtml.trim()) e.errorPage = 'Isi HTML halaman error';
     return e;
@@ -353,6 +425,9 @@ export default function Create() {
       setProgress({ label: 'Mengirim ke antrean build…', value: 100 });
       const config = {
         ...cfg, source, iconFileId, splash,
+        // iklan memakai blok "ads" (rilis 5); flag AdMob lama diturunkan dari situ
+        features: { ...cfg.features, admob: cfg.features.ads && cfg.ads.network === 'admob', interstitial: false },
+        ads: { ...cfg.ads, interstitial: cfg.ads.interstitial },
         versionCodeOverride: cfg.versionCodeOverride ? Number(cfg.versionCodeOverride) : null,
         errorPageFileId: errorMode === 'keep' ? cfg.errorPageFileId : '',
         ...(errorMode === 'custom' ? { errorPageHtml: errorHtml } : {})
@@ -404,7 +479,8 @@ export default function Create() {
           )}
         </>)}
         {cfg.source.type === 'zip' && <>
-          <FileDrop accept=".zip,application/zip" file={zipFile} onFile={setZipFile} hint={`ZIP berisi index.html di root (mis. folder dist React/Vite). Maks ${MAX_ZIP_MB} MB.`} />
+          <FileDrop accept=".zip,application/zip" file={zipFile} onFile={setZipFile} hint={`ZIP hasil build (index.html) atau kode sumber React/Vite/Vue/Svelte/Angular (package.json) — di-build otomatis. Maks ${MAX_ZIP_MB} MB.`} />
+          {zipInfo && <Alert severity={zipInfo.type} sx={{ mt: 1 }}>{zipInfo.text}</Alert>}
           {cfg.source.fileId && !zipFile && <Alert severity="info" sx={{ mt: 1 }}>ZIP sebelumnya dipakai lagi bila tidak memilih file baru.</Alert>}
           <Typography variant="body2" sx={{ mt: 1 }}>Punya foto, musik, video, atau PDF? Pakai <Link component={RouterLink} to="/media-app">Media App Maker</Link>.</Typography>
         </>}
@@ -518,8 +594,14 @@ export default function Create() {
         <BottomNavSection cfg={cfg} set={set} Toggle={T} />
       </Section>
 
-      <Section title="Plugin native" chip="baru">
+      <Section title="Plugin native dasar" chip="QR, biometrik, billing, FCM">
         <PluginsSection cfg={cfg} set={set} Toggle={T} onFcm={(id) => set('fcmFileId', id)} />
+        {errors.fcm && <Alert severity="warning" sx={{ mt: 1 }}>{errors.fcm}</Alert>}
+      </Section>
+
+      <Section title="Fitur native lengkap (NFC, printer, OCR, lokasi, notifikasi…)" chip="60+ API">
+        <NativePluginsSection cfg={cfg} set={set} Toggle={T} />
+        {errors.native && <Alert severity="warning" sx={{ mt: 1 }}>{errors.native}</Alert>}
       </Section>
 
       <Section title="Kode kustom & aturan link">
@@ -597,22 +679,8 @@ export default function Create() {
           helperText="Mis. ApkifyApp — server Anda bisa mendeteksi pengunjung dari aplikasi" />
       </Section>
 
-      <Section title="Monetisasi AdMob" chip="pendapatan untuk Anda">
-        <Grid container>
-          <Grid item xs={12} sm={6}><Toggle k="admob" label="Aktifkan AdMob" f={f} set={set} /></Grid>
-          <Grid item xs={12} sm={6}><Toggle k="interstitial" label="Iklan interstitial (layar penuh)" f={f} set={set} /></Grid>
-        </Grid>
-        {(f.admob || f.interstitial) && (
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField label="AdMob App ID" placeholder="ca-app-pub-0000000000000000~0000000000" value={cfg.admob.appId} onChange={(e) => set('admob.appId', e.target.value.trim())} error={!!errors.admob} helperText={errors.admob} />
-            <TextField label="Banner Ad Unit ID (opsional)" placeholder="ca-app-pub-0000000000000000/0000000000" value={cfg.admob.bannerId} onChange={(e) => set('admob.bannerId', e.target.value.trim())} />
-            {f.interstitial && <>
-              <TextField label="Interstitial Ad Unit ID" value={cfg.admob.interstitialId} onChange={(e) => set('admob.interstitialId', e.target.value.trim())} error={!!errors.interstitial} helperText={errors.interstitial} />
-              <Typography variant="body2">Tampil setiap {cfg.admob.interstitialEvery} perpindahan halaman (min. jeda 60 detik)</Typography>
-              <Slider value={cfg.admob.interstitialEvery} min={2} max={20} onChange={(_, v) => set('admob.interstitialEvery', v)} />
-            </>}
-          </Stack>
-        )}
+      <Section title="Monetisasi iklan" chip="AdMob · AppLovin · Unity · Meta · Start.io">
+        <AdsSection cfg={cfg} set={set} Toggle={T} error={errors.ads} />
       </Section>
 
       <Section title="Push notification & live chat">
@@ -642,6 +710,12 @@ export default function Create() {
   const { products } = await Apkify.iap.products(['premium']);
   const { purchases } = await Apkify.iap.purchase('premium');
   Apkify.storage.set('k', 'v');  const { token } = await Apkify.getPushToken();
+  // rilis 5 — lihat /docs/api:
+  const tag = await Apkify.nfc.read();            // {id, records:[{value}]}
+  await Apkify.bt.print({ address, base64: Apkify.escpos().text('Halo').cut().base64() });
+  const { text } = await Apkify.ocr.recognize({ url: foto.url });
+  const r = await Apkify.ads.showRewarded();       // {rewarded, amount}
+  Apkify.on('scan', (d) => console.log(d.data));  // scanner Zebra/Honeywell
 });
 document.addEventListener('apkifyshare', (e) => console.log(e.detail.text));`}</Box>
         )}

@@ -5,7 +5,12 @@ export const BUILD_ID = process.env.BUILD_ID;
 export const AUTH = { authorization: `Bearer ${process.env.BUILDER_SECRET}` };
 
 export async function api(path, init = {}) {
-  const res = await fetch(`${API}${path}`, { ...init, headers: { ...AUTH, ...(init.headers || {}) } });
+  let res;
+  // coba ulang bila koneksi terputus (mis. socket keep-alive ditutup server setelah langkah panjang)
+  for (let i = 1; ; i++) {
+    try { res = await fetch(`${API}${path}`, { ...init, headers: { ...AUTH, ...(init.headers || {}) } }); break; }
+    catch (e) { if (i >= 3) throw e; await new Promise((r) => setTimeout(r, 1000 * i)); }
+  }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     const e = new Error(`${init.method || 'GET'} ${path} -> ${res.status} ${t.slice(0, 300)}`);
