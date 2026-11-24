@@ -10,7 +10,6 @@ import com.startapp.sdk.adsbase.Ad
 import com.startapp.sdk.adsbase.StartAppAd
 import com.startapp.sdk.adsbase.StartAppSDK
 import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener
-import com.startapp.sdk.adsbase.adlisteners.AdEventListener
 import org.json.JSONObject
 
 /** Start.io (StartApp): banner, interstitial, rewarded video. */
@@ -28,10 +27,10 @@ class StartioAds : AdProvider {
         StartAppSDK.init(host, c.str("appId"), false)
         StartAppAd.disableSplash()
         if (c.optBoolean("testMode")) StartAppSDK.setTestAdsEnabled(true)
-        inter = StartAppAd(host).also { it.loadAd(StartAppAd.AdMode.AUTOMATIC, null as AdEventListener?) }
+        inter = StartAppAd(host).also { it.loadAd(StartAppAd.AdMode.AUTOMATIC) }
         rewarded = StartAppAd(host).also { r ->
             r.setVideoListener { completed = true }
-            r.loadAd(StartAppAd.AdMode.REWARDED_VIDEO, null as AdEventListener?)
+            r.loadAd(StartAppAd.AdMode.REWARDED_VIDEO)
         }
         ready()
     }
@@ -49,12 +48,12 @@ class StartioAds : AdProvider {
     }
 
     private fun show(ad: StartAppAd?, reload: StartAppAd.AdMode, done: (Boolean) -> Unit) {
-        if (ad == null || !ad.isReady) { ad?.loadAd(reload, null as AdEventListener?); return done(false) }
+        if (ad == null || !ad.isReady) { ad?.loadAd(reload); return done(false) }
         ad.showAd(object : AdDisplayListener {
-            override fun adHidden(a: Ad?) { done(true); ad.loadAd(reload, null as AdEventListener?) }
+            override fun adHidden(a: Ad?) { done(true); ad.loadAd(reload) }
             override fun adDisplayed(a: Ad?) {}
             override fun adClicked(a: Ad?) {}
-            override fun adNotDisplayed(a: Ad?) { done(false); ad.loadAd(reload, null as AdEventListener?) }
+            override fun adNotDisplayed(a: Ad?) { done(false); ad.loadAd(reload) }
         })
     }
 

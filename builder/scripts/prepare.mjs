@@ -302,6 +302,8 @@ function adsMeta(c) {
   const out = [];
   const appId = a.admob?.appId || c.admob?.appId;
   if (net === 'admob' && appId) out.push(`<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${xml(appId)}" />`);
+  // AdMob + Firebase Analytics sama-sama mendeklarasikan AD_SERVICES_CONFIG -> pakai milik AdMob
+  if (net === 'admob' && (c.features.firebaseAnalytics || c.features.crashlytics) && c.fcmFileId) out.push('<property android:name="android.adservices.AD_SERVICES_CONFIG" android:resource="@xml/gma_ad_services_config" tools:replace="android:resource" />');
   if ((net === 'applovin' || (net === 'admob' && (a.mediation || []).includes('applovin'))) && a.applovin?.sdkKey) out.push(`<meta-data android:name="applovin.sdk.key" android:value="${xml(a.applovin.sdkKey)}" />`);
   return out.join('\n        ');
 }

@@ -45,9 +45,9 @@ export const GUIDES = [
     intro: 'Proyek Lovable adalah React + Vite, bisa sebagai URL atau ZIP offline.',
     steps: [
       'Cara cepat: klik Publish di Lovable, salin URL .lovable.app, pakai tab Website.',
-      'Cara offline: sinkronkan ke GitHub, clone, ubah vite.config.ts menjadi base: "./".',
-      'Ganti BrowserRouter menjadi HashRouter agar navigasi berjalan dari aset lokal.',
-      'Jalankan npm install && npm run build, lalu zip ISI folder dist dan unggah lewat tab ZIP.',
+      'Cara offline: sinkronkan ke GitHub lalu unduh ZIP repositori (Code → Download ZIP) — tanpa perlu build sendiri.',
+      'Unggah ZIP itu di tab ZIP: Apkify menjalankan npm install + npm run build otomatis. BrowserRouter tetap berjalan, tidak perlu diganti.',
+      'Butuh fitur HP (NFC, printer, OCR, notifikasi)? Aktifkan di “Fitur native lengkap” dan panggil window.Apkify dari kode React.',
       'Jika memakai Supabase, tambahkan https://appassets.androidplatform.net ke daftar URL yang diizinkan (Auth → URL Configuration).'
     ]
   },

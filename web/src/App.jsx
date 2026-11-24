@@ -11,6 +11,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const BuildDetail = lazy(() => import('./pages/BuildDetail'));
 const Docs = lazy(() => import('./pages/Docs'));
+const DocsApi = lazy(() => import('./pages/DocsApi'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const ToolsIndex = lazy(() => import('./pages/tools/ToolsIndex'));
 const IconResizer = lazy(() => import('./pages/tools/IconResizer'));
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/build/:buildId" element={<ProtectedRoute><BuildDetail /></ProtectedRoute>} />
           <Route path="/docs" element={<Docs />} />
+          <Route path="/docs/api" element={<DocsApi />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/tools" element={<ToolsIndex />} />
           <Route path="/tools/icon-resizer" element={<IconResizer />} />

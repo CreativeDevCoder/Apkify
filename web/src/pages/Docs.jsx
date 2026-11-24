@@ -17,12 +17,13 @@ const SECTIONS = [
     ]
   },
   {
-    id: 'zip', title: 'Menyiapkan ZIP (React, Vite, Vue, static)', body: [
-      'ZIP harus berisi index.html di bagian paling luar (bukan di dalam sub-folder).',
-      'Vite: set base: "./" di vite.config.js, jalankan npm run build, lalu zip ISI folder dist.',
-      'Create React App: tambahkan "homepage": "." di package.json sebelum build.',
-      'Gunakan HashRouter (bukan BrowserRouter) untuk SPA di ZIP, karena file dibuka dari aset lokal.',
-      'Konten ZIP/HTML berjalan offline. Panggilan API ke server luar tetap butuh internet dan CORS yang mengizinkan origin https://appassets.androidplatform.net.'
+    id: 'zip', title: 'ZIP: hasil build atau kode sumber (React, Vite, Vue, Svelte, Angular)', body: [
+      'Dua pilihan: (1) ZIP hasil build berisi index.html, atau (2) ZIP kode sumber berisi package.json — Apkify menjalankan npm install + npm run build otomatis di kontainer terisolasi (pnpm/yarn/bun terdeteksi dari lockfile).',
+      'Hapus folder node_modules sebelum di-zip agar unggahan kecil; dependensi dipasang ulang otomatis.',
+      'Konten disajikan di root https://appassets.androidplatform.net/, jadi BrowserRouter / history API, base "/" bawaan Vite, dan path absolut (/assets/…) berjalan normal. HashRouter juga tetap bisa.',
+      'Rute yang tidak punya berkas (mis. /produk/12) otomatis diarahkan ke index.html (SPA fallback).',
+      'Konten ZIP/HTML berjalan offline. Panggilan API ke server luar tetap butuh internet dan CORS yang mengizinkan origin https://appassets.androidplatform.net (atau aktifkan “Izinkan cross-origin”).',
+      'Variabel lingkungan build (VITE_*) dibaca dari file .env di dalam ZIP. Jangan menaruh kunci rahasia di sana — semua yang ada di bundle frontend bisa dibaca orang.'
     ]
   },
   {
