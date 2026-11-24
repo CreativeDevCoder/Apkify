@@ -8,7 +8,7 @@ const APP = import.meta.env.VITE_APP_NAME || 'Apkify';
 // Ringkasan riset publik (November 2026). Harga & fitur pesaing bisa berubah — cek situs resminya.
 const COLS = ['Harga', 'Android', 'iOS', 'Windows', 'macOS/Linux', 'ZIP/HTML offline', 'Plugin native (JS bridge)', 'Tanpa watermark gratis'];
 const ROWS = [
-  [APP, 'Gratis', true, 'IPA + Xcode', '.exe + .msi', '.dmg, .AppImage, .deb', true, '20+ plugin', true],
+  [APP, 'Gratis', true, 'IPA + Xcode', '.exe + .msi', '.dmg, .AppImage, .deb', 'Ya + build kode sumber', '60+ API, 5 jaringan iklan', true],
   ['FreeWebToApk', 'Gratis', true, false, false, false, true, '—', true],
   ['Median.co', 'Mulai $229 + biaya tahunan', true, true, false, false, '—', 'Lengkap (paket berbayar)', false],
   ['WebToNative', 'Mulai $39 sekali (Android)', true, true, false, false, '—', 'Add-on', false],
@@ -53,7 +53,7 @@ export default function Compare() {
 
         <Typography variant="h5" sx={{ mt: 5, mb: 2 }}>Yang membuat {APP} berbeda</Typography>
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          {['5 platform dari 1 konfigurasi', 'Build paralel di cloud', 'Desktop ringan (Tauri)', 'IPA tanpa Mac', 'Google Play Billing', 'Scanner QR native', 'Biometrik', 'Navigasi bawah & FAB',
+          {['5 platform dari 1 konfigurasi', 'NFC, printer thermal, OCR, geofence', 'AdMob/AppLovin/Unity/Meta/Start.io', 'Build ZIP kode sumber React/Vite', 'Build paralel di cloud', 'Desktop ringan (Tauri)', 'IPA tanpa Mac', 'Google Play Billing', 'Scanner QR native', 'Biometrik', 'Navigasi bawah & FAB',
             'Remote Update/OTA', 'Analitik bawaan', 'AI Studio', 'Hosting subdomain', 'Keystore & sertifikat sendiri', 'Enkripsi konten', 'Tanpa watermark'].map((x) => <Chip key={x} label={x} color="primary" variant="outlined" />)}
         </Stack>
         <Alert severity="info" sx={{ mt: 3 }}>

@@ -144,6 +144,14 @@ Penyedia yang secret-nya belum diisi otomatis dilewati — Anda bisa mulai dari 
 - **App Links:** sidik jari SHA-256 disimpan otomatis setiap build Android; salin `assetlinks.json` dari Studio → ⋮ → App Links.
 - Kuota runner: repo publik gratis; build macOS/Windows lebih lama (± 10–25 menit untuk build pertama, lebih cepat setelah cache Rust terisi).
 
+### A5. Fitur rilis 5 (fitur native lengkap, iklan multi-jaringan, build dari kode sumber)
+- **60+ API native** lewat `window.Apkify` (dokumentasi: halaman `/docs/api`): NFC (baca/tulis/HCE), Bluetooth Classic (printer thermal ESC/POS) & BLE, USB OTG, sensor, IR blaster, kamera native, pemindai dokumen/OCR/deteksi wajah/QR (ML Kit), lokasi + deteksi Fake GPS + geofence absensi + pengenalan aktivitas, notifikasi lokal/terjadwal/badge, sinkronisasi latar (WorkManager), mulai otomatis saat boot, audio latar + kontrol layar kunci, PiP, Chromecast, TTS/STT, rekam audio, cetak, penampil PDF, simpan ke galeri, unduhan berprogres, kontak, kalender, telepon/SMS, OTP SMS otomatis (User Consent), bagikan/buka berkas, **akses folder pilihan pengguna (SAF, izin permanen)**, penyimpanan terenkripsi, SQLite, install referrer, login Google native (Credential Manager), login Facebook, Firebase Analytics & Crashlytics, Play Integrity, In-App Update, halaman bayar (Midtrans/Xendit) di Custom Tab, dialog/action sheet/date-time picker native, status bar & orientasi runtime, widget, Quick Settings tile, ganti ikon, kunci aplikasi, kiosk/launcher, scanner industri (Zebra DataWedge+RFID, Honeywell, Sunmi, Urovo, Newland, iData) dan konfigurasi MDM.
+- Tidak memakai izin yang butuh persetujuan khusus Google Play (lokasi latar, baca SMS/log panggilan, aksesibilitas, notification listener). Beberapa fitur cukup mengisi formulir biasa di Play Console (deklarasi foreground service mediaPlayback, Data safety).
+- **Modular:** hanya SDK fitur yang dipilih yang ikut ke APK (source set `mod_*` & `ads_*`, dimuat lewat refleksi).
+- **Iklan:** jaringan AdMob, AppLovin MAX, Unity Ads, Meta Audience Network, Start.io; format banner (atas/bawah, adaptif/collapsible/native), interstitial otomatis, rewarded, rewarded interstitial, app open; persetujuan GDPR (UMP); adaptor mediasi AdMob (Meta, AppLovin, Unity, Pangle, Mintegral, ironSource).
+- **ZIP kode sumber** (React/Vite/Vue/Svelte/Angular): di-build otomatis (`npm install` + `npm run build`) di kontainer Docker tanpa secret; untuk desktop/iOS dibangun sekali di job Linux `source` lalu diteruskan sebagai artifact. Konten lokal kini disajikan di root `https://appassets.androidplatform.net/` dengan SPA fallback → BrowserRouter berjalan.
+- **CI `template-check`:** setiap perubahan di `builder/**` meng-compile template Android untuk 6 kombinasi (minimal, semua fitur + AdMob + mediasi, AppLovin + kode sumber Vite, Unity, Meta, Start.io) memakai API tiruan (`builder/ci/mock-api.mjs`).
+
 ### A3. Fitur rilis 3
 - **Hosting subdomain:** isi `HOSTING_DOMAIN` (mis. `apps.domainanda.com`) di `wrangler.toml`, buat DNS wildcard `*.apps` (proxied/oranye) ke domain Anda, dan aktifkan route `*.apps.domainanda.com/*` ke Worker. File situs disimpan di R2.
 - **Remote Update:** isi `PUBLIC_API_BASE` (URL publik API) agar aplikasi Android bisa mengecek pesan/paksa update/konten OTA.
@@ -211,8 +219,8 @@ Email: pastikan `EMAIL_FROM` memakai domain yang sudah diverifikasi (SPF/DKIM) d
 - Log build bisa dilihat publik (repo publik) — tidak berisi rahasia. Jika ingin privat, gunakan repo privat (kuota 2.000 menit/bulan).
 
 ## 7. Batasan yang perlu diketahui
-- Template Android **belum saya kompilasi** di sini (lingkungan saya tidak punya Android SDK). Script persiapan sudah diuji. Jalankan satu build uji di GitHub Actions; bila ada error versi dependency, sesuaikan di `builder/android-template/app/build.gradle`.
+- Template Android dikompilasi otomatis oleh workflow `template-check` untuk setiap kombinasi modul & jaringan iklan. Versi SDK pihak ketiga (iklan, Facebook) diperbarui berkala — bila jaringan iklan mewajibkan versi baru, ubah di `builder/android-template/app/build.gradle`.
 - Versi target: compileSdk/targetSdk 36, AGP 8.11.1, Gradle 8.14.3, Kotlin 2.2.0. Cek syarat target API Google Play terbaru sebelum rilis.
 - Body request Workers Free maks 100 MB → batas ZIP diset 50 MB.
-- Konten ZIP/HTML tidak dienkripsi di dalam APK (referensi mengenkripsi; bisa ditambah nanti).
-- Login Google di dalam WebView diblokir Google (berlaku untuk semua converter sejenis).
+- Login Google di dalam WebView diblokir Google — gunakan fitur **Login Google native** (`Apkify.google.signIn()`) lalu teruskan ID token ke Firebase/Supabase.
+- Mulai otomatis saat boot di Android 10+ hanya berjalan bila aplikasi dijadikan launcher/kiosk (aturan Android untuk membuka activity dari latar).

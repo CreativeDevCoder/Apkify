@@ -21,9 +21,20 @@ const GROUPS = [
     ['Penyimpanan native & analitik', 'Data bertahan & statistik pengguna aktif harian.'],
     ['CSS/JS kustom & aturan link', 'Sembunyikan elemen situs di aplikasi, atur link internal/eksternal/blokir dengan regex.']
   ]],
+  ['Fitur HP lengkap (60+ API)', [
+    ['NFC', 'Baca/tulis tag & kartu, UID, mode pantau, emulasi kartu (HCE).'],
+    ['Printer thermal & BLE', 'Cetak struk ESC/POS lewat Bluetooth atau USB OTG, perangkat BLE (timbangan, IoT).'],
+    ['Pemindai dokumen & OCR', 'Auto-crop multi-halaman + PDF, baca teks KTP/struk, deteksi wajah — offline (ML Kit).'],
+    ['Absensi & lokasi', 'Geofence area kantor, deteksi Fake GPS, pengenalan aktivitas.'],
+    ['Notifikasi lokal & latar', 'Pengingat terjadwal/berulang, badge, sinkronisasi latar, mulai saat boot.'],
+    ['Media', 'Audio latar + kontrol layar kunci, PiP, Chromecast, TTS, dikte suara, rekam audio, cetak, PDF.'],
+    ['Data & berkas', 'Kamera native, kontak, kalender, OTP SMS otomatis, akses folder pilihan, SQLite, penyimpanan terenkripsi.'],
+    ['Login & Firebase', 'Login Google & Facebook native, Analytics, Crashlytics, Play Integrity, In-App Update.'],
+    ['Bisnis & kiosk', 'Mode kiosk/launcher, scanner Zebra/Honeywell/Sunmi (+RFID), MDM, widget, Quick Settings, ganti ikon, kunci aplikasi.']
+  ]],
   ['Sumber konten', [
     ['Website (URL)', 'Konten selalu terbaru mengikuti situs Anda.'],
-    ['ZIP offline', 'Hasil build React/Vite/Vue/Angular atau situs statis dibundel ke APK dan berjalan tanpa internet.'],
+    ['ZIP offline', 'Hasil build atau kode sumber React/Vite/Vue/Svelte/Angular — di-build otomatis di cloud, BrowserRouter didukung.'],
     ['HTML tempel', 'Satu halaman HTML langsung jadi aplikasi.'],
     ['Template', 'Mulai dari katalog toko, link in bio, kalkulator, kuis, dan lainnya.'],
     ['AI Studio', 'Jelaskan aplikasi yang Anda mau, AI membuatkan kodenya.'],
@@ -46,7 +57,8 @@ const GROUPS = [
     ['Mode cache WebView', 'Standar, utamakan cache, atau selalu terbaru.']
   ]],
   ['Monetisasi & engagement', [
-    ['AdMob', 'Banner adaptif dengan ID milik Anda — 100% pendapatan untuk Anda.'],
+    ['Iklan multi-jaringan', 'AdMob (+mediasi), AppLovin MAX, Unity Ads, Meta Audience Network, Start.io — 100% pendapatan untuk Anda.'],
+    ['Semua format iklan', 'Banner (adaptif/collapsible/native), interstitial, rewarded, rewarded interstitial, app open.'],
     ['Push notification', 'OneSignal, cukup App ID.'],
     ['Marketplace', 'Jual atau beli aplikasi jadi di marketplace kami.']
   ]],
