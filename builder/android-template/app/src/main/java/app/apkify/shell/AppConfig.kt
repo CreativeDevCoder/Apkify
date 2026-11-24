@@ -26,6 +26,10 @@ class AppConfig(private val json: JSONObject) {
 
     private val f = json.optJSONObject("features") ?: JSONObject()
     private fun flag(k: String, d: Boolean = false) = f.optBoolean(k, d)
+    /** fitur boolean apa pun (rilis 5: plugin native) */
+    fun on(k: String) = f.optBoolean(k, false)
+    /** blok konfigurasi tambahan, mis. section("ads"), section("google") */
+    fun section(k: String): JSONObject = json.optJSONObject(k) ?: JSONObject()
     val pullToRefresh = flag("pullToRefresh", true)
     val fileUpload = flag("fileUpload", true)
     val downloads = flag("downloads", true)
@@ -119,7 +123,7 @@ class AppConfig(private val json: JSONObject) {
     /** Objek window.APKIFY yang disuntikkan ke halaman */
     fun publicJson(): String = JSONObject().apply {
         put("appId", appId); put("name", name); put("packageName", packageName)
-        put("versionName", versionName); put("versionCode", versionCode)
+        put("versionName", versionName); put("versionCode", versionCode); put("platform", "android")
         if (supabaseUrl.isNotBlank()) { put("supabaseUrl", supabaseUrl); put("supabaseAnonKey", supabaseAnonKey) }
     }.toString()
 

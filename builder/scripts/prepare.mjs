@@ -8,7 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import sharp from 'sharp';
-import { api, download, mask, setEnv, reportFailure, BUILD_ID } from './lib.mjs';
+import { api, download, mask, setEnv, reportFailure, BUILD_ID, extractZip } from './lib.mjs';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const WORK = process.env.WORK_DIR || path.join(ROOT, 'work');
@@ -22,7 +22,7 @@ class UserError extends Error {}
 
 async function main() {
   const cfgRes = await api(`/api/internal/builds/${BUILD_ID}/config`);
-  const { config: c, versionCode, keystore, iconUrl, sourceUrl, splashUrl, errorPageUrl, fcmUrl, appId, apiBase } = await cfgRes.json();
+  const { config: c, versionCode, keystore, iconUrl, sourceUrl, splashUrl, errorPageUrl, fcmUrl, altIconUrls = [], appId, apiBase } = await cfgRes.json();
   console.log(`Build ${BUILD_ID}: ${c.name} (${c.packageName}) v${c.versionName}/${versionCode} sumber=${c.source.type}`);
 
   fs.rmSync(WORK, { recursive: true, force: true });
@@ -30,7 +30,8 @@ async function main() {
   fs.mkdirSync(ASSETS, { recursive: true });
 
   // ---- Konfigurasi runtime untuk aplikasi (dibaca MainActivity) ----
-  const LOCAL_URL = 'https://appassets.androidplatform.net/assets/www/index.html';
+  // konten lokal disajikan di root origin -> path absolut & BrowserRouter (history API) berjalan
+  const LOCAL_URL = 'https://appassets.androidplatform.net/';
   const runtime = {
     name: c.name,
     packageName: c.packageName,
@@ -52,6 +53,9 @@ async function main() {
     supabase: c.features.supabase ? c.supabase : null,
     bottomNav: c.bottomNav || { items: [] }, fab: c.fab || {}, shortcuts: c.shortcuts || [], linkRules: c.linkRules || [],
     customCss: c.customCss || '', customJs: c.customJs || '',
+    // rilis 5: plugin native & iklan
+    ads: c.ads || {}, google: c.google || {}, appLock: c.appLock || {}, widget: c.widget || {}, tile: c.tile || {},
+    kiosk: c.kiosk || {}, integrity: c.integrity || {}, nfc: c.nfc || {},
     encrypted: c.source.type !== 'url' && c.features.encrypt !== false
   };
   fs.writeFileSync(path.join(ASSETS, 'apkify.json'), JSON.stringify(runtime, null, 2));
@@ -71,15 +75,39 @@ async function main() {
   if (F.onesignal || F.notifications || F.fcm) perms.push('android.permission.POST_NOTIFICATIONS');
   if (F.vibrate || F.jsApi) perms.push('android.permission.VIBRATE');
   if (F.keepAwake) perms.push('android.permission.WAKE_LOCK');
-  if (F.downloads) perms.push('android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28');
+  if (F.downloads || F.saveGallery) perms.push('android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28');
+  // ---- Rilis 5: izin plugin native (tanpa izin yang butuh persetujuan khusus Google Play) ----
+  const feats = [];
+  if (F.nfc) { perms.push('android.permission.NFC'); feats.push('android.hardware.nfc'); }
+  if (F.nfc && F.nfcHce) feats.push('android.hardware.nfc.hce');
+  if (F.bluetooth) {
+    perms.push('android.permission.BLUETOOTH" android:maxSdkVersion="30', 'android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30',
+      'android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation', 'android.permission.BLUETOOTH_CONNECT');
+    if (!F.geolocation && !F.locationApi && !F.geofence) perms.push('android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30');
+    feats.push('android.hardware.bluetooth', 'android.hardware.bluetooth_le');
+  }
+  if (F.usb) feats.push('android.hardware.usb.host');
+  if (F.sensors || F.activityRecognition) perms.push('android.permission.ACTIVITY_RECOGNITION');
+  if (F.activityRecognition) perms.push('com.google.android.gms.permission.ACTIVITY_RECOGNITION');
+  if (F.infrared) { perms.push('android.permission.TRANSMIT_IR'); feats.push('android.hardware.consumerir'); }
+  if (F.localNotifications || F.backgroundSync) perms.push('android.permission.POST_NOTIFICATIONS');
+  if (F.localNotifications || F.autoStart) perms.push('android.permission.RECEIVE_BOOT_COMPLETED');
+  if (F.backgroundAudio) perms.push('android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'android.permission.POST_NOTIFICATIONS', 'android.permission.WAKE_LOCK');
+  if (F.audioRecord) perms.push('android.permission.RECORD_AUDIO');
+  if (F.contacts && F.contactsRead) perms.push('android.permission.READ_CONTACTS');
+  if (F.phoneCall && F.directCall) { perms.push('android.permission.CALL_PHONE'); feats.push('android.hardware.telephony'); }
+  if (F.locationApi || F.geofence) perms.push('android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION');
+  if (F.kiosk) perms.push('android.permission.REORDER_TASKS');
+  const permLines = [...new Set(perms)];
   const orientation = { portrait: 'portrait', landscape: 'landscape' }[c.orientation] || 'unspecified';
   let manifest = fs.readFileSync(path.join(WORK, 'app/src/main/AndroidManifest.xml'), 'utf8');
   manifest = manifest
-    .replace('<!--PERMISSIONS-->', perms.map((p) => `<uses-permission android:name="${p}" />`).join('\n    '))
+    .replace('<!--PERMISSIONS-->', permLines.map((p) => `<uses-permission android:name="${p}" />`).join('\n    '))
     .replace('__ORIENTATION__', orientation)
-    .replace('<!--ADMOB-->', c.features.admob
-      ? `<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${xml(c.admob.appId)}" />`
-      : '')
+    .replace('<!--ADMOB-->', adsMeta(c))
+    .replace('<!--FEATURES-->', feats.map((f) => `<uses-feature android:name="${f}" android:required="false" />`).join('\n    ') + '\n    <!--FEATURES-->')
+    .replace('__ACTIVITY_ATTRS__', F.pip ? 'android:supportsPictureInPicture="true"\n            android:resizeableActivity="true"' : '')
+    .replace('<!--COMPONENTS-->', components(c) + '\n        <!--COMPONENTS-->')
     .replace('android:usesCleartextTraffic="false"', `android:usesCleartextTraffic="${F.httpsOnly ? 'false' : 'true'}"`);
   // Deep linking: tautan ke domain situs dibuka langsung di aplikasi
   if (F.deepLinking && c.source.type === 'url') {
@@ -110,18 +138,50 @@ async function main() {
       .replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@mipmap/ic_launcher_round"\n        android:banner="@drawable/tv_banner"');
   }
   // Firebase Cloud Messaging
-  if (F.fcm && fcmUrl) {
+  if ((F.fcm || F.firebaseAnalytics || F.crashlytics) && fcmUrl) {
     await download(new URL(fcmUrl).pathname, path.join(WORK, 'app', 'google-services.json'));
     const gs = JSON.parse(fs.readFileSync(path.join(WORK, 'app', 'google-services.json'), 'utf8'));
     if (!(gs.client || []).some((x) => x.client_info?.android_client_info?.package_name === c.packageName)) {
       throw new UserError(`google-services.json tidak memuat package ${c.packageName}. Tambahkan aplikasi Android dengan package ini di Firebase Console.`);
     }
-    manifest = manifest.replace('<!--ADMOB-->', `<!--ADMOB-->
+    if (F.fcm) manifest = manifest.replace('<!--ADMOB-->', `<!--ADMOB-->
         <service android:name=".FcmService" android:exported="false">
             <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
         </service>`);
   }
-  if (c.features.camera) manifest = manifest.replace('<!--FEATURES-->', '<uses-feature android:name="android.hardware.camera" android:required="false" />');
+  // Kiosk sebagai launcher (HOME): perangkat langsung membuka aplikasi ini saat menyala
+  if (F.kiosk && c.kiosk?.launcher) {
+    manifest = manifest.replace('<category android:name="android.intent.category.LAUNCHER" />', '<category android:name="android.intent.category.LAUNCHER" />\n                <category android:name="android.intent.category.HOME" />\n                <category android:name="android.intent.category.DEFAULT" />');
+  }
+  // Ikon alternatif (ganti ikon dari JS): launcher dipindah ke activity-alias
+  if (F.altIcons && altIconUrls.length) {
+    const m = manifest.match(/            <intent-filter>\s*<action android:name="android.intent.action.MAIN" \/>[\s\S]*?<\/intent-filter>\n/);
+    if (m) {
+      manifest = manifest.replace(m[0], '');
+      const filter = m[0].replace(/^ {12}/gm, '            ');
+      const alias = (name, icon, enabled) => `        <activity-alias
+            android:name=".${name}"
+            android:enabled="${enabled}"
+            android:exported="true"
+            android:icon="@mipmap/${icon}"
+            android:roundIcon="@mipmap/${icon}"
+            android:targetActivity=".MainActivity">
+${filter}        </activity-alias>`;
+      const aliases = [alias('IconDefault', 'ic_launcher', true), ...altIconUrls.map((_, i) => alias(`IconAlt${i + 1}`, `ic_launcher_alt${i + 1}`, false))];
+      manifest = manifest.replace('    </application>', aliases.join('\n') + '\n    </application>');
+    }
+  }
+  // HCE: AID tambahan
+  if (F.nfc && F.nfcHce && Array.isArray(c.nfc?.aids)) {
+    const p = path.join(RES, 'xml/apduservice.xml');
+    fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('<!--AIDS-->', c.nfc.aids.map((a) => `<aid-filter android:name="${xml(a)}" />`).join('\n        ')));
+  }
+  // Facebook Login: App ID & Client Token
+  if (F.facebookLogin) {
+    fs.writeFileSync(path.join(RES, 'values/strings.xml'), fs.readFileSync(path.join(RES, 'values/strings.xml'), 'utf8')
+      .replace('</resources>', `  <string name="facebook_app_id">${xml(c.facebook?.appId || '')}</string>\n  <string name="facebook_client_token">${xml(c.facebook?.clientToken || '')}</string>\n</resources>`));
+  }
+  if (c.features.camera || F.nativeCamera) manifest = manifest.replace('<!--FEATURES-->', '<uses-feature android:name="android.hardware.camera" android:required="false" />\n    <!--FEATURES-->');
   fs.writeFileSync(path.join(WORK, 'app/src/main/AndroidManifest.xml'), manifest);
 
   // ---- Ikon launcher, adaptive icon, splash ----
@@ -148,6 +208,16 @@ async function main() {
       .composite([{ input: await sharp(iconPath).resize(inner, inner, { fit: 'cover' }).png().toBuffer(), gravity: 'center' }])
       .png().toFile(path.join(dir, 'ic_launcher_foreground.png'));
   }
+  // Ikon alternatif
+  if (F.altIcons) {
+    for (const [i, u] of altIconUrls.entries()) {
+      const p = await download(new URL(u).pathname, path.join(TMP, `alt${i + 1}.png`));
+      for (const [d, k] of Object.entries(dens)) {
+        const s = Math.round(48 * k);
+        await sharp(p).resize(s, s, { fit: 'cover' }).png().toFile(path.join(RES, `mipmap-${d}`, `ic_launcher_alt${i + 1}.png`));
+      }
+    }
+  }
   const nodpi = path.join(RES, 'drawable-nodpi');
   fs.mkdirSync(nodpi, { recursive: true });
   // Splash: gambar kustom (bila diunggah) atau ikon aplikasi
@@ -172,17 +242,8 @@ async function main() {
       await download(new URL(sourceUrl).pathname, path.join(www, 'index.html'));
     } else {
       const zip = await download(new URL(sourceUrl).pathname, path.join(TMP, 'source.zip'));
-      // unzip menolak path "../" (zip-slip) secara default
-      execFileSync('unzip', ['-q', '-o', zip, '-d', www], { stdio: 'inherit' });
-      // kasus umum: ZIP berisi satu folder (mis. dist/) -> naikkan isinya
-      let entries = fs.readdirSync(www).filter((e) => !e.startsWith('__MACOSX') && e !== '.DS_Store');
-      if (!fs.existsSync(path.join(www, 'index.html')) && entries.length === 1 && fs.statSync(path.join(www, entries[0])).isDirectory()) {
-        const inner = path.join(www, entries[0]);
-        for (const e of fs.readdirSync(inner)) fs.renameSync(path.join(inner, e), path.join(www, e));
-        fs.rmSync(inner, { recursive: true, force: true });
-      }
-      fs.rmSync(path.join(www, '__MACOSX'), { recursive: true, force: true });
-      if (!fs.existsSync(path.join(www, 'index.html'))) throw new UserError('ZIP tidak berisi index.html di folder utama.');
+      // ZIP siap pakai (index.html) atau kode sumber React/Vite/Vue/Svelte (package.json -> di-build otomatis)
+      try { await extractZip(zip, www, TMP); } catch (e) { throw e.user ? new UserError(e.message) : e; }
     }
   }
 
@@ -232,6 +293,45 @@ async function main() {
     if (sha) await api(`/api/internal/builds/${BUILD_ID}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sha256: sha }) });
   } catch (e) { console.warn('SHA-256 tidak terbaca:', e.message); }
   console.log('Proyek siap di', WORK);
+}
+
+/** meta-data jaringan iklan (wajib ada sebelum SDK diinisialisasi) */
+function adsMeta(c) {
+  const a = c.ads || {};
+  const net = a.network || (c.features.admob ? 'admob' : '');
+  const out = [];
+  const appId = a.admob?.appId || c.admob?.appId;
+  if (net === 'admob' && appId) out.push(`<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${xml(appId)}" />`);
+  if ((net === 'applovin' || (net === 'admob' && (a.mediation || []).includes('applovin'))) && a.applovin?.sdkKey) out.push(`<meta-data android:name="applovin.sdk.key" android:value="${xml(a.applovin.sdkKey)}" />`);
+  return out.join('\n        ');
+}
+
+/** service/receiver/meta-data sesuai fitur */
+function components(c) {
+  const F = c.features, out = [];
+  if (F.nfc && F.nfcHce) out.push(`<service android:name=".HceService" android:exported="true" android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter><action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" /></intent-filter>
+            <meta-data android:name="android.nfc.cardemulation.host_apdu_service" android:resource="@xml/apduservice" />
+        </service>`);
+  if (F.localNotifications || F.autoStart) out.push(`<receiver android:name=".NotifyReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>`);
+  if (F.backgroundAudio) out.push(`<service android:name=".MediaService" android:exported="false" android:foregroundServiceType="mediaPlayback" />`);
+  if (F.widget) out.push(`<receiver android:name=".AppWidget" android:exported="true" android:label="@string/app_name">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>`);
+  if (F.quickTile) out.push(`<service android:name=".QsTile" android:exported="true" android:icon="@drawable/ic_nav_${xml(c.tile?.icon || 'apps')}" android:label="${xml(c.tile?.label || c.name)}" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>`);
+  if (F.mdm) out.push('<meta-data android:name="android.content.APP_RESTRICTIONS" android:resource="@xml/app_restrictions" />');
+  if (F.cast) out.push('<meta-data android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME" android:value="app.apkify.shell.mod.CastOptionsProvider" />');
+  if (F.facebookLogin) out.push('<meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id" />\n        <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />');
+  return out.join('\n        ');
 }
 
 function encryptAssets() {

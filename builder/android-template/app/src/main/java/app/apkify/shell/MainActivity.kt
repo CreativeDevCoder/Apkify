@@ -55,6 +55,8 @@ import com.google.android.material.navigation.NavigationView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import android.content.res.ColorStateList
+import android.content.res.Configuration
+import androidx.activity.result.IntentSenderRequest
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -73,8 +75,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawer: DrawerLayout
     private lateinit var toolbar: MaterialToolbar
     private lateinit var assetLoader: WebViewAssetLoader
-    private val encrypted by lazy { EncryptedAssets(this) }
+    private val local by lazy { LocalServer(this, cfg) }
     val native by lazy { Native(this) }
+    lateinit var plugins: Plugins
+    val webView: WebView get() = web
     private var pendingShare: String? = null
     private var bottomNav: BottomNavigationView? = null
 
@@ -87,8 +91,8 @@ class MainActivity : AppCompatActivity() {
 
     private val startHost by lazy { Uri.parse(cfg.startUrl).host.orEmpty() }
     private val errorPage by lazy {
-        if (runCatching { assets.open("error.html").close() }.isSuccess) "https://$ASSET_HOST/assets/error.html"
-        else "https://$ASSET_HOST/assets/offline.html"
+        if (runCatching { assets.open("error.html").close() }.isSuccess) "https://$ASSET_HOST/__apkify/error.html"
+        else "https://$ASSET_HOST/__apkify/offline.html"
     }
 
     // ---------- Activity result launchers ----------
@@ -106,6 +110,73 @@ class MainActivity : AppCompatActivity() {
 
     private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    // ---------- Launcher generik untuk plugin (izin, activity result, intent sender) ----------
+    private val permQueue = ArrayDeque<Pair<List<String>, (Map<String, Boolean>) -> Unit>>()
+    private var permBusy = false
+    private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        permQueue.removeFirstOrNull()?.second?.invoke(r)
+        permBusy = false
+        externalFlow = false
+        nextPerm()
+    }
+
+    private fun nextPerm() {
+        if (permBusy) return
+        val next = permQueue.firstOrNull() ?: return
+        permBusy = true
+        externalFlow = true
+        permLauncher.launch(next.first.toTypedArray())
+    }
+
+    /** Minta izin runtime. any=true: cukup salah satu (mis. lokasi kasar/presisi). */
+    fun requestPerms(perms: List<String>, any: Boolean = false, cb: (Boolean) -> Unit) {
+        val need = perms.filter { !has(it) }
+        if (perms.isEmpty() || need.isEmpty() || (any && need.size < perms.size)) return cb(true)
+        permQueue.addLast(need to { r -> cb(if (any) perms.any { r[it] == true || has(it) } else need.all { r[it] == true || has(it) }) })
+        nextPerm()
+    }
+
+    fun declares(p: String): Boolean = runCatching {
+        packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS).requestedPermissions?.contains(p) == true
+    }.getOrDefault(false)
+
+    private var resultCb: ((Int, Intent?) -> Unit)? = null
+    private val resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val cb = resultCb; resultCb = null; cb?.invoke(r.resultCode, r.data)
+    }
+    /** true selama aplikasi membuka layar sistem (kamera, pemilih berkas, izin) -> kunci aplikasi tidak dipicu */
+    var externalFlow = false
+    fun startForResult(i: Intent, cb: (Int, Intent?) -> Unit) {
+        resultCb?.invoke(RESULT_CANCELED, null)
+        externalFlow = true
+        resultCb = { c, d -> externalFlow = false; cb(c, d) }
+        try { resultLauncher.launch(i) } catch (e: ActivityNotFoundException) { resultCb = null; externalFlow = false; cb(RESULT_CANCELED, null) }
+    }
+
+    private var senderCb: ((Int, Intent?) -> Unit)? = null
+    val senderLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        val cb = senderCb; senderCb = null; cb?.invoke(r.resultCode, r.data)
+    }
+    fun startSenderForResult(req: IntentSenderRequest, cb: (Int, Intent?) -> Unit) {
+        senderCb?.invoke(RESULT_CANCELED, null)
+        externalFlow = true
+        senderCb = { c, d -> externalFlow = false; cb(c, d) }
+        senderLauncher.launch(req)
+    }
+
+    /** Kirim event ke halaman: document 'apkify:<nama>' + Apkify.on(nama, fn) */
+    fun emit(event: String, data: Any? = null) = runOnUiThread {
+        val d = when (data) { null -> "null"; is JSONObject, is org.json.JSONArray -> data.toString(); is String -> JSONObject.quote(data); else -> data.toString() }
+        web.evaluateJavascript("window.__apkifyEmit && window.__apkifyEmit(${JSONObject.quote(event)}, $d)", null)
+    }
+
+    fun setToolbar(visible: Boolean, title: String) {
+        toolbar.visibility = if (visible) View.VISIBLE else View.GONE
+        if (title.isNotBlank()) toolbar.title = title
+    }
+
+    fun setPullToRefresh(enable: Boolean) { swipe.isEnabled = enable }
+
     private val mediaPerm = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         val req = pendingPermission ?: return@registerForActivityResult
         pendingPermission = null
@@ -119,6 +190,7 @@ class MainActivity : AppCompatActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         cfg = AppConfig.get(this)
+        plugins = Plugins(this)
         // Durasi splash minimum (ms) sesuai pengaturan
         splash.setKeepOnScreenCondition { SystemClock.elapsedRealtime() - startedAt < cfg.splashDurationMs }
         setContentView(R.layout.activity_main)
@@ -142,13 +214,19 @@ class MainActivity : AppCompatActivity() {
         swipe.setOnRefreshListener { if (showingOffline) reloadStart() else web.reload() }
         swipe.setOnChildScrollUpCallback { _, _ -> web.scrollY > 0 }
 
-        if (cfg.admob) Ads.init(this, findViewById<FrameLayout>(R.id.adContainer), cfg)
+        plugins.get<AdsPlugin>()?.start()
         if (cfg.onesignal) Push.requestPermission()
         if (cfg.fcm && Build.VERSION.SDK_INT >= 33 && !has(Manifest.permission.POST_NOTIFICATIONS)) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
         setupBottomNav()
         setupFab()
         setupShortcuts()
         Remote.ping(this)
+        AppFiles.prune(this)
+        plugins.get<UiPlugin>()?.onCreateLock()
+        plugins.get<PlayPlugin>()?.autoCheck()
+        // Kiosk: kunci layar ke aplikasi ini (screen pinning / lock task untuk device owner)
+        if (cfg.on("kiosk") && (cfg.section("kiosk").optBoolean("autoStart") || runCatching { UiPlugin.mdmConfig(this).optBoolean("kiosk") }.getOrDefault(false))) runCatching { startLockTask() }
+        if (cfg.on("barcodeScanner")) plugins.handle("scanner.start", JSONObject(), Reply(this, "_"))
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -162,7 +240,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        if (savedInstanceState != null) web.restoreState(savedInstanceState) else web.loadUrl(cfg.startUrl)
+        if (savedInstanceState != null) web.restoreState(savedInstanceState) else web.loadUrl(startUrl())
         handleDeepLink(intent)
         Remote.check(this)
     }
@@ -170,10 +248,18 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleDeepLink(intent)
+        plugins.each { it.onNewIntent(intent) }
+    }
+
+    /** URL awal: bisa ditimpa MDM (managed configuration "startUrl") */
+    private fun startUrl(): String {
+        if (cfg.on("mdm")) runCatching { UiPlugin.mdmConfig(this).optString("startUrl") }.getOrNull()?.takeIf { it.startsWith("https://") }?.let { return it }
+        return cfg.startUrl
     }
 
     private fun handleDeepLink(intent: Intent?) {
         intent ?: return
+        if (intent.hasExtra(Notifier.EXTRA_ID)) emit("notificationClick", JSONObject().put("id", intent.getIntExtra(Notifier.EXTRA_ID, 0)).put("url", intent.dataString ?: ""))
         // Share target: teks/link dibagikan dari aplikasi lain -> event 'apkifyshare' di halaman
         if (cfg.shareTarget && intent.action == Intent.ACTION_SEND) {
             val text = listOfNotNull(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getStringExtra(Intent.EXTRA_TEXT)).joinToString("\n")
@@ -388,19 +474,21 @@ class MainActivity : AppCompatActivity() {
 
         // window.APKIFY / window.Apkify disuntikkan sebelum skrip halaman berjalan (bila didukung WebView)
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(web, Scripts.apiShim(cfg), setOf("*"))
+            WebViewCompat.addDocumentStartJavaScript(web, Scripts.apiShim(cfg, plugins.available()), setOf("*"))
             docStartScript = true
         }
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val u = request.url
-                if (u.host == ASSET_HOST && (u.path ?: "").startsWith("/assets/www/")) {
-                    val rel = Uri.decode(u.encodedPath!!.removePrefix("/assets/www/"))
-                    Remote.otaDir(this@MainActivity)?.let { dir -> Remote.serveOta(dir, rel)?.let { return it } }
-                    if (cfg.encrypted) return encrypted.serve(rel)
+                if (u.host == ASSET_HOST) {
+                    val p = u.path ?: "/"
+                    if (p.startsWith(AppFiles.PREFIX)) return AppFiles.serve(this@MainActivity, p)
+                    if (p.startsWith("/__apkify/")) return local.internal(p)
+                    if (p.startsWith("/res/")) return assetLoader.shouldInterceptRequest(u)
+                    if (cfg.local) return local.serve(request)
+                    return assetLoader.shouldInterceptRequest(u)
                 }
-                if (u.host == ASSET_HOST) return assetLoader.shouldInterceptRequest(u)
                 if (cfg.local && cfg.crossOrigin && request.method == "GET" && !request.isForMainFrame && u.scheme == "https") {
                     return corsProxy(request)
                 }
@@ -415,7 +503,7 @@ class MainActivity : AppCompatActivity() {
                     "bar" -> progress.visibility = View.VISIBLE
                     "spinner" -> spinner.visibility = View.VISIBLE
                 }
-                Ads.onNavigation(this@MainActivity)
+                plugins.get<AdsPlugin>()?.onNavigation()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -423,7 +511,7 @@ class MainActivity : AppCompatActivity() {
                 spinner.visibility = View.GONE
                 swipe.isRefreshing = false
                 showingOffline = url == errorPage
-                if (!docStartScript) view.evaluateJavascript(Scripts.apiShim(cfg), null)
+                if (!docStartScript) view.evaluateJavascript(Scripts.apiShim(cfg, plugins.available()), null)
                 if (!cfg.textSelection) view.evaluateJavascript(Scripts.NO_SELECT, null)
                 if (!showingOffline && (cfg.customCss.isNotBlank() || cfg.customJs.isNotBlank())) view.evaluateJavascript(Scripts.custom(cfg), null)
                 if (!showingOffline) syncBottomNav(url)
@@ -584,6 +672,11 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         if (!mainFrame) return false
+        // Tautan PDF dibuka di penampil PDF native
+        if (cfg.on("pdfViewer") && (uri.path ?: "").lowercase().endsWith(".pdf")) {
+            native.handle("pdf.open", JSONObject().put("url", s), "_")
+            return true
+        }
         val host = uri.host.orEmpty()
         if (host == ASSET_HOST) return false
         val internal = !cfg.local && (host == startHost || host.endsWith(".$startHost") || startHost.endsWith(".$host"))
@@ -608,10 +701,10 @@ class MainActivity : AppCompatActivity() {
 
     fun reloadStart() {
         showingOffline = false
-        web.loadUrl(cfg.startUrl)
+        web.loadUrl(startUrl())
     }
 
-    private fun has(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
+    fun has(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
     private fun parse(c: String) = runCatching { Color.parseColor(c) }.getOrDefault(Color.DKGRAY)
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean = false
@@ -621,11 +714,30 @@ class MainActivity : AppCompatActivity() {
         web.saveState(outState)
     }
 
-    override fun onResume() { super.onResume(); web.onResume() }
-    override fun onPause() { web.onPause(); super.onPause() }
+    override fun onResume() { super.onResume(); web.onResume(); web.resumeTimers(); plugins.each { it.onResume() } }
+    override fun onPause() {
+        plugins.each { it.onPause() }
+        // audio latar aktif -> halaman tetap berjalan saat aplikasi di belakang / layar terkunci
+        if (!MediaService.running) web.onPause()
+        super.onPause()
+    }
+
+    override fun onUserLeaveHint() { super.onUserLeaveHint(); plugins.get<MediaPlugin>()?.onUserLeave() }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, newConfig)
+        toolbar.visibility = if (inPip || !cfg.showToolbar) View.GONE else View.VISIBLE
+        bottomNav?.visibility = if (inPip || !(cfg.bottomNav && cfg.navItems.size >= 2)) View.GONE else View.VISIBLE
+        plugins.each { it.onPipChanged(inPip) }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        plugins.each { it.onConfigurationChanged(newConfig) }
+    }
 
     override fun onDestroy() {
-        Ads.destroy()
+        plugins.each { it.onDestroy() }
         native.destroy()
         web.destroy()
         super.onDestroy()

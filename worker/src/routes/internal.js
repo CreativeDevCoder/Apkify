@@ -59,6 +59,7 @@ export async function getConfig(req, env, buildId) {
     splashUrl: f(bc.config.splash?.fileId),
     errorPageUrl: f(bc.config.errorPageFileId),
     fcmUrl: f(bc.config.fcmFileId),
+    altIconUrls: (bc.config.altIconFileIds || []).map(f),
     appId: b.appId,
     apiBase: (env.PUBLIC_API_BASE || origin).replace(/\/$/, '')
   });

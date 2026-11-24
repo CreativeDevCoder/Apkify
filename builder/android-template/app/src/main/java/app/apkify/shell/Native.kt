@@ -44,7 +44,7 @@ class Native(private val activity: MainActivity) {
             "iap.acknowledge" -> if (cfg.billing) acknowledge(id, args.optString("token")) else err(id, "disabled")
             "iap.consume" -> if (cfg.billing) consume(id, args.optString("token")) else err(id, "disabled")
             "pushToken" -> Fcm.token(activity) { t -> if (t != null) ok(id, JSONObject().put("token", t)) else err(id, "unavailable") }
-            else -> err(id, "unknown command")
+            else -> activity.plugins.handle(cmd, args, Reply(activity, id))
         }
     }
 

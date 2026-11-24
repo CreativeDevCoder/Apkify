@@ -96,12 +96,12 @@ export async function createBuild(req, env, ctx) {
   if (owner && owner !== user.uid) throw new HttpError(409, 'Package name sudah dipakai pengguna lain. Gunakan nama lain.');
 
   // Validasi file milik user
-  for (const fid of [cfg.iconFileId, cfg.source.fileId, cfg.splash.fileId, cfg.errorPageFileId, cfg.fcmFileId].filter(Boolean)) {
+  for (const fid of [cfg.iconFileId, cfg.source.fileId, cfg.splash.fileId, cfg.errorPageFileId, cfg.fcmFileId, ...(cfg.altIconFileIds || [])].filter(Boolean)) {
     const m = await getFileMeta(env, fid);
     if (!m || m.owner !== user.uid) throw new HttpError(403, 'File tidak valid');
   }
   if (!cfg.iconFileId) throw new HttpError(400, 'Ikon wajib ada');
-  if (cfg.features.fcm && !cfg.fcmFileId) throw new HttpError(400, 'Unggah google-services.json untuk Firebase Cloud Messaging');
+  if ((cfg.features.fcm || cfg.features.firebaseAnalytics || cfg.features.crashlytics) && !cfg.fcmFileId) throw new HttpError(400, 'Unggah google-services.json untuk Firebase (FCM / Analytics / Crashlytics)');
   // Desktop & iOS memakai runner Windows/macOS: khusus akun terdaftar
   if (user.anonymous && Object.entries(cfg.platforms).some(([k, v]) => v && k !== 'android')) {
     throw new HttpError(403, 'Build desktop & iOS butuh akun gratis. Daftar dulu, atau pilih Android saja.');

@@ -12,7 +12,36 @@ permissions:
   contents: read
 
 jobs:
+  # Ekstrak / build kode sumber ZIP sekali di Linux (Docker terisolasi, tanpa secret di dalam kontainer)
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      built: ${{ steps.src.outputs.built }}
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      BUILDER_SECRET: ${{ secrets.BUILDER_SECRET }}
+      BUILD_ID: ${{ inputs.build_id }}
+      JOBS: ios
+      LOG_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Siapkan konten
+        id: src
+        run: node builder/scripts/build-source.mjs
+      - uses: actions/upload-artifact@v4
+        if: steps.src.outputs.built == 'true'
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
+          include-hidden-files: true
+          retention-days: 1
+
   ios:
+    needs: source
     runs-on: macos-latest
     timeout-minutes: 45
     env:
@@ -24,6 +53,12 @@ jobs:
       WORK_DIR: ${{ github.workspace }}/work-ios
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@v4
+        if: needs.source.outputs.built == 'true'
+        with:
+          name: site
+          path: ${{ runner.temp }}/site
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Install alat
@@ -32,7 +67,7 @@ jobs:
           cd builder/scripts && npm install --no-audit --no-fund
       - name: Siapkan proyek iOS
         id: prepare
-        run: node builder/scripts/prepare-ios.mjs
+        run: PREBUILT_SITE="$RUNNER_TEMP/site" node builder/scripts/prepare-ios.mjs
       - name: Build IPA
         run: bash builder/scripts/build-ios.sh
       - name: Unggah hasil

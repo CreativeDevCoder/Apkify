@@ -1,0 +1,64 @@
+# Uji compile template Android untuk setiap kombinasi modul plugin & jaringan iklan (tanpa Worker sungguhan).
+name: template-check
+on:
+  push:
+    paths: ['builder/**', 'worker/src/config.js', '.github/workflows/template-check.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [minimal, full, applovin, unity, meta, startio]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      API_BASE: http://127.0.0.1:8787
+      BUILDER_SECRET: ci
+      BUILD_ID: ci-${{ matrix.fixture }}
+      FIXTURE: ${{ matrix.fixture }}
+      WORK_DIR: ${{ github.workspace }}/work
+      CRASHLYTICS_UPLOAD: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - name: Install script deps
+        working-directory: builder/scripts
+        run: npm install --no-audit --no-fund
+      - name: Mock API
+        run: |
+          node builder/ci/mock-api.mjs > /tmp/mock.log 2>&1 &
+          for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8787/ && break; sleep 1; done
+          cat /tmp/mock.log
+      - name: Prepare
+        run: node builder/scripts/prepare.mjs
+      - name: Manifest
+        run: cat work/app/src/main/AndroidManifest.xml
+      - name: Gradle assembleRelease
+        working-directory: work
+        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Ukuran APK
+        run: ls -la work/app/build/outputs/apk/release/
+      - uses: actions/upload-artifact@v4
+        if: matrix.fixture == 'full'
+        with:
+          name: apk-${{ matrix.fixture }}
+          path: work/app/build/outputs/apk/release/*.apk
+          retention-days: 7
+      - name: Log mock
+        if: always()
+        run: cat /tmp/mock.log || true

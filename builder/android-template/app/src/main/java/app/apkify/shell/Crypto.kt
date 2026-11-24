@@ -2,8 +2,6 @@ package app.apkify.shell
 
 import android.content.Context
 import android.webkit.MimeTypeMap
-import android.webkit.WebResourceResponse
-import java.io.ByteArrayInputStream
 import java.io.FileNotFoundException
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -16,27 +14,14 @@ import javax.crypto.spec.SecretKeySpec
 class EncryptedAssets(private val ctx: Context) {
     private val key by lazy { SecretKeySpec(K.k(), "AES") }
 
-    fun serve(path: String): WebResourceResponse? {
-        // path relatif terhadap /assets/www/
-        var rel = path.trimStart('/').substringBefore('?').substringBefore('#')
-        if (rel.isEmpty() || rel.endsWith("/")) rel += "index.html"
-        if (rel.contains("..")) return null
-        val bytes = try {
-            ctx.assets.open("www_enc/$rel").use { it.readBytes() }
-        } catch (e: FileNotFoundException) {
-            return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, ByteArrayInputStream(ByteArray(0)))
-        }
-        val plain = try {
+    /** isi asli berkas terenkripsi (rel relatif terhadap www/), null bila tidak ada */
+    fun bytes(rel: String): ByteArray? {
+        val data = try { ctx.assets.open("www_enc/$rel").use { it.readBytes() } } catch (e: FileNotFoundException) { return null }
+        return try {
             val c = Cipher.getInstance("AES/GCM/NoPadding")
-            c.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes, 0, 12))
-            c.doFinal(bytes, 12, bytes.size - 12)
-        } catch (e: Exception) {
-            return null
-        }
-        val mime = mimeOf(rel)
-        return WebResourceResponse(mime, if (isText(mime)) "utf-8" else null, ByteArrayInputStream(plain)).apply {
-            responseHeaders = mapOf("Cache-Control" to "no-cache", "Access-Control-Allow-Origin" to "*")
-        }
+            c.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, data, 0, 12))
+            c.doFinal(data, 12, data.size - 12)
+        } catch (e: Exception) { null }
     }
 
     companion object {

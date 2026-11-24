@@ -7,9 +7,26 @@ plugins {
 
 // Konfigurasi ditulis oleh scripts/prepare.mjs
 def cfg = new JsonSlurper().parse(file('src/main/assets/apkify.json'))
-def useAdmob = cfg.features?.admob == true
-def usePush = cfg.features?.onesignal == true
-def useFcm = cfg.features?.fcm == true && file('google-services.json').exists()
+def F = cfg.features ?: [:]
+def on = { k -> F[k] == true }
+def usePush = on('onesignal')
+def hasGs = file('google-services.json').exists()
+def useFcm = on('fcm') && hasGs
+// Rilis 5: satu jaringan iklan per aplikasi (kode SDK lain tidak ikut ter-bundle)
+def adNet = (cfg.ads?.network ?: '') ?: (on('admob') ? 'admob' : '')
+if (!(adNet in ['admob', 'applovin', 'unity', 'meta', 'startio'])) adNet = ''
+def mediation = (cfg.ads?.mediation ?: []) as List
+// Modul plugin opsional: hanya ikut bila fiturnya dipilih (APK tetap kecil)
+def mods = [
+    vision  : on('docScanner') || on('ocr') || on('faceDetection') || on('qrGenerate'),
+    location: on('locationApi') || on('geofence') || on('activityRecognition'),
+    work    : on('backgroundSync'),
+    cast    : on('cast'),
+    google  : on('googleSignIn'),
+    facebook: on('facebookLogin'),
+    firebase: (on('firebaseAnalytics') || on('crashlytics')) && hasGs
+]
+def useCrashlytics = mods.firebase && on('crashlytics')
 
 android {
     namespace 'app.apkify.shell'
@@ -44,7 +61,8 @@ android {
     // Fitur opsional dipilih lewat source set: AdMob/OneSignal hanya ikut ter-bundle bila dipakai
     sourceSets {
         main {
-            java.srcDirs += [useAdmob ? 'src/admob/java' : 'src/noadmob/java']
+            if (adNet) java.srcDirs += ["src/ads_${adNet}/java"]
+            mods.each { k, v -> if (v) java.srcDirs += ["src/mod_${k}/java"] }
             java.srcDirs += [usePush ? 'src/onesignal/java' : 'src/nopush/java']
             java.srcDirs += [useFcm ? 'src/fcm/java' : 'src/nofcm/java']
         }
@@ -74,14 +92,65 @@ dependencies {
     implementation 'com.google.android.play:review:2.0.2'
     implementation 'com.android.billingclient:billing-ktx:7.1.1'
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
-    if (useFcm) implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    // Rilis 5: plugin native inti (kecil; aktif/tidak ditentukan saat runtime oleh apkify.json)
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+    implementation 'androidx.exifinterface:exifinterface:1.3.7'
+    implementation 'androidx.browser:browser:1.8.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'com.android.installreferrer:installreferrer:2.2'
+    implementation 'com.google.android.play:app-update:2.1.0'
+    implementation 'com.google.android.play:integrity:1.4.0'
+    implementation 'com.google.android.gms:play-services-auth-api-phone:18.1.0'
+    if (useFcm || mods.firebase) implementation platform('com.google.firebase:firebase-bom:33.7.0')
     if (useFcm) implementation 'com.google.firebase:firebase-messaging'
-    if (useAdmob) implementation 'com.google.android.gms:play-services-ads:23.6.0'
+    if (mods.firebase) {
+        implementation 'com.google.firebase:firebase-analytics'
+        if (useCrashlytics) implementation 'com.google.firebase:firebase-crashlytics'
+    }
+    // Modul opsional
+    if (mods.vision) {
+        implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1'
+        implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
+        implementation 'com.google.android.gms:play-services-mlkit-face-detection:17.1.0'
+        implementation 'com.google.zxing:core:3.5.3'
+    }
+    if (mods.location) implementation 'com.google.android.gms:play-services-location:21.3.0'
+    if (mods.work) implementation 'androidx.work:work-runtime-ktx:2.9.1'
+    if (mods.cast) {
+        implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
+        implementation 'androidx.mediarouter:mediarouter:1.7.0'
+    }
+    if (mods.google) {
+        implementation 'androidx.credentials:credentials:1.3.0'
+        implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
+        implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+    }
+    if (mods.facebook) implementation 'com.facebook.android:facebook-login:[17.0.0,18.0.0)'
+    // Jaringan iklan
+    if (adNet == 'admob') {
+        implementation 'com.google.android.gms:play-services-ads:23.6.0'
+        implementation 'com.google.android.ump:user-messaging-platform:3.1.0'
+        // adaptor mediasi AdMob (atur waterfall/bidding di dashboard AdMob)
+        if ('meta' in mediation) implementation 'com.google.ads.mediation:facebook:6.18.0.0'
+        if ('applovin' in mediation) implementation 'com.google.ads.mediation:applovin:13.0.1.0'
+        if ('unity' in mediation) implementation 'com.google.ads.mediation:unity:4.12.5.0'
+        if ('pangle' in mediation) implementation 'com.google.ads.mediation:pangle:6.3.0.4.0'
+        if ('mintegral' in mediation) implementation 'com.google.ads.mediation:mintegral:16.8.61.0'
+        if ('ironsource' in mediation) implementation 'com.google.ads.mediation:ironsource:8.4.0.0'
+    }
+    if (adNet == 'applovin') implementation 'com.applovin:applovin-sdk:13.0.1'
+    if (adNet == 'unity') implementation 'com.unity3d.ads:unity-ads:4.12.5'
+    if (adNet == 'meta') implementation 'com.facebook.android:audience-network-sdk:6.18.0'
+    if (adNet == 'startio') implementation 'com.startapp:inapp-sdk:5.1.0'
     if (usePush) {
         implementation 'com.onesignal:OneSignal:[5.1.6, 5.1.99]'
         implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     }
 }
 
-// Firebase Cloud Messaging hanya bila google-services.json diunggah
-if (useFcm) apply plugin: 'com.google.gms.google-services'
+// Firebase (FCM / Analytics / Crashlytics) hanya bila google-services.json diunggah
+if (useFcm || mods.firebase) apply plugin: 'com.google.gms.google-services'
+if (useCrashlytics) {
+    apply plugin: 'com.google.firebase.crashlytics'
+    android.buildTypes.release.firebaseCrashlytics { mappingFileUploadEnabled = System.getenv('CRASHLYTICS_UPLOAD') != '0' }
+}

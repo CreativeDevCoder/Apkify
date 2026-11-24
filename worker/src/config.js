@@ -34,8 +34,31 @@ export const FEATURE_DEFAULTS = {
   // plugin native (rilis 4)
   bottomNav: false, fab: false, qrScanner: false, biometric: false, inAppReview: false, billing: false,
   nativeStorage: false, shareTarget: false, shortcuts: false, androidTv: false, analytics: false, fcm: false,
-  customCode: false, linkRules: false
+  customCode: false, linkRules: false,
+  // plugin native (rilis 5) — tanpa izin yang butuh persetujuan khusus Google Play
+  ads: false,
+  sensors: false, infrared: false, nfc: false, nfcHce: false, bluetooth: false, usb: false,
+  nativeCamera: false, docScanner: false, ocr: false, faceDetection: false, qrGenerate: false,
+  locationApi: false, geofence: false, activityRecognition: false,
+  localNotifications: false, backgroundSync: false, autoStart: false,
+  backgroundAudio: false, pip: false, cast: false, tts: false, speech: false, audioRecord: false,
+  print: false, pdfViewer: false, saveGallery: false,
+  contacts: false, contactsRead: false, calendar: false, smsOtp: false, phoneCall: false, directCall: false,
+  shareFiles: false, fileSystem: false, secureStorage: false, sqlite: false, installReferrer: false,
+  googleSignIn: false, facebookLogin: false, firebaseAnalytics: false, crashlytics: false,
+  playIntegrity: false, inAppUpdate: false, autoUpdate: false, payments: false,
+  widget: false, quickTile: false, altIcons: false, appLock: false, kiosk: false,
+  barcodeScanner: false, mdm: false
 };
+
+// Plugin yang memerlukan "JavaScript APIs" (window.Apkify) agar bisa dipakai halaman
+const NEEDS_JS = ['sensors', 'infrared', 'nfc', 'bluetooth', 'usb', 'nativeCamera', 'docScanner', 'ocr', 'faceDetection', 'qrGenerate',
+  'locationApi', 'geofence', 'activityRecognition', 'localNotifications', 'backgroundSync', 'backgroundAudio', 'pip', 'cast', 'tts', 'speech',
+  'audioRecord', 'print', 'pdfViewer', 'saveGallery', 'contacts', 'calendar', 'smsOtp', 'phoneCall', 'shareFiles', 'fileSystem', 'secureStorage',
+  'sqlite', 'installReferrer', 'googleSignIn', 'facebookLogin', 'firebaseAnalytics', 'crashlytics', 'playIntegrity', 'inAppUpdate', 'payments',
+  'widget', 'quickTile', 'altIcons', 'barcodeScanner', 'mdm'];
+export const AD_NETWORKS = ['admob', 'applovin', 'unity', 'meta', 'startio'];
+export const MEDIATION = ['meta', 'applovin', 'unity', 'pangle', 'mintegral', 'ironsource'];
 
 export const NAV_ICONS = ['home', 'search', 'cart', 'user', 'heart', 'bell', 'apps', 'menu', 'info', 'chat', 'star', 'list', 'place', 'phone', 'play', 'qr', 'share', 'up'];
 export const PLATFORMS = ['android', 'windows', 'macos', 'linux', 'ios'];
@@ -55,6 +78,13 @@ export function sanitizeConfig(c) {
   for (const [k, d] of Object.entries(FEATURE_DEFAULTS)) features[k] = typeof f[k] === 'boolean' ? f[k] : d;
   features.cacheMode = ['default', 'cacheElseNetwork', 'noCache'].includes(f.cacheMode) ? f.cacheMode : 'default';
   if (features.interstitial) features.admob = true;
+  // fitur turunan
+  if (features.nfcHce) features.nfc = true;
+  if (features.contactsRead) features.contacts = true;
+  if (features.directCall) features.phoneCall = true;
+  if (features.autoUpdate) features.inAppUpdate = true;
+  if (features.geofence || features.activityRecognition) features.locationApi = true;
+  if (NEEDS_JS.some((k) => features[k])) features.jsApi = true;
 
   const t = c.source?.type;
   if (!['url', 'zip', 'html'].includes(t)) throw new HttpError(400, 'Sumber tidak valid');
@@ -70,9 +100,68 @@ export function sanitizeConfig(c) {
     appId: str(c.admob?.appId, 80), bannerId: str(c.admob?.bannerId, 80), interstitialId: str(c.admob?.interstitialId, 80),
     interstitialEvery: Math.min(20, Math.max(2, Math.round(Number(c.admob?.interstitialEvery) || 4)))
   };
-  if (features.admob && !/^ca-app-pub-\d+~\d+$/.test(admob.appId)) throw new HttpError(400, 'AdMob App ID tidak valid');
+  if (features.admob && !/^ca-app-pub-\d+~\d+$/.test(admob.appId)) admob.appId = '';
   if (admob.bannerId && !/^ca-app-pub-\d+\/\d+$/.test(admob.bannerId)) admob.bannerId = '';
-  if (features.interstitial && !/^ca-app-pub-\d+\/\d+$/.test(admob.interstitialId)) throw new HttpError(400, 'Interstitial Ad Unit ID tidak valid');
+  if (features.interstitial && !/^ca-app-pub-\d+\/\d+$/.test(admob.interstitialId)) admob.interstitialId = '';
+  // ---------- Rilis 5: iklan multi-format & multi-jaringan ----------
+  const A = c.ads || {};
+  const unit = (v, re) => { const x = str(v, 120); return re.test(x) ? x : ''; };
+  const AU = /^ca-app-pub-\d+\/\d+$/;
+  const ID = /^[\w\-.:]{2,120}$/;
+  const network = AD_NETWORKS.includes(A.network) ? A.network : (features.admob ? 'admob' : '');
+  const ads = {
+    network: features.ads || features.admob ? network : '',
+    banner: ['bottom', 'top', 'none'].includes(A.banner) ? A.banner : 'bottom',
+    bannerStyle: ['adaptive', 'collapsible', 'native'].includes(A.bannerStyle) ? A.bannerStyle : 'adaptive',
+    interstitial: A.interstitial === true || features.interstitial,
+    interstitialEvery: Math.min(50, Math.max(1, Math.round(Number(A.interstitialEvery ?? c.admob?.interstitialEvery) || 4))),
+    minGapSec: Math.min(600, Math.max(0, Math.round(Number(A.minGapSec) || 45))),
+    appOpen: A.appOpen === true,
+    mediation: (Array.isArray(A.mediation) ? A.mediation : []).filter((m) => MEDIATION.includes(m)),
+    admob: {
+      appId: /^ca-app-pub-\d+~\d+$/.test(A.admob?.appId) ? A.admob.appId : (/^ca-app-pub-\d+~\d+$/.test(c.admob?.appId) ? c.admob.appId : ''),
+      bannerId: unit(A.admob?.bannerId || c.admob?.bannerId, AU), interstitialId: unit(A.admob?.interstitialId || c.admob?.interstitialId, AU),
+      rewardedId: unit(A.admob?.rewardedId, AU), rewardedInterstitialId: unit(A.admob?.rewardedInterstitialId, AU),
+      appOpenId: unit(A.admob?.appOpenId, AU), nativeId: unit(A.admob?.nativeId, AU)
+    },
+    applovin: {
+      sdkKey: str(A.applovin?.sdkKey, 120).replace(/[^\w\-]/g, ''),
+      bannerId: unit(A.applovin?.bannerId, ID), interstitialId: unit(A.applovin?.interstitialId, ID),
+      rewardedId: unit(A.applovin?.rewardedId, ID), appOpenId: unit(A.applovin?.appOpenId, ID)
+    },
+    unity: {
+      gameId: unit(A.unity?.gameId, /^\d{5,12}$/), testMode: A.unity?.testMode === true,
+      bannerId: unit(A.unity?.bannerId, ID), interstitialId: unit(A.unity?.interstitialId, ID), rewardedId: unit(A.unity?.rewardedId, ID)
+    },
+    meta: { bannerId: unit(A.meta?.bannerId, /^\d+_\d+$/), interstitialId: unit(A.meta?.interstitialId, /^\d+_\d+$/), rewardedId: unit(A.meta?.rewardedId, /^\d+_\d+$/) },
+    startio: { appId: unit(A.startio?.appId, /^\d{6,12}$/), testMode: A.startio?.testMode === true }
+  };
+  if (ads.network) {
+    features.ads = true;
+    if (ads.network === 'admob' && !ads.admob.appId) throw new HttpError(400, 'AdMob App ID tidak valid (format ca-app-pub-xxx~yyy)');
+    if (ads.network === 'applovin' && ads.applovin.sdkKey.length < 20) throw new HttpError(400, 'AppLovin SDK key wajib diisi');
+    if (ads.network === 'unity' && !ads.unity.gameId) throw new HttpError(400, 'Unity Game ID wajib diisi (angka)');
+    if (ads.network === 'meta' && !Object.values(ads.meta).some(Boolean)) throw new HttpError(400, 'Isi minimal satu Placement ID Meta Audience Network');
+    if (ads.network === 'startio' && !ads.startio.appId) throw new HttpError(400, 'Start.io App ID wajib diisi');
+    // kompatibilitas: konfigurasi AdMob lama dipakai builder versi sebelumnya
+    features.admob = ads.network === 'admob';
+    if (!features.admob) features.interstitial = false;
+  } else { features.ads = false; ads.appOpen = false; ads.interstitial = false; }
+  if (ads.network !== 'admob') ads.mediation = [];
+
+  const google = { webClientId: /^[\w\-]+\.apps\.googleusercontent\.com$/.test(str(c.google?.webClientId, 200)) ? str(c.google.webClientId, 200) : '' };
+  if (features.googleSignIn && !google.webClientId) throw new HttpError(400, 'Login Google native butuh Web client ID (…apps.googleusercontent.com)');
+  const facebook = { appId: unit(c.facebook?.appId, /^\d{6,20}$/), clientToken: unit(c.facebook?.clientToken, /^[a-f0-9]{32}$/i) };
+  if (features.facebookLogin && (!facebook.appId || !facebook.clientToken)) throw new HttpError(400, 'Login Facebook butuh App ID & Client Token');
+  const appLock = { timeoutSec: Math.min(3600, Math.max(0, Math.round(Number(c.appLock?.timeoutSec) || 30))) };
+  const widget = { title: str(c.widget?.title, 40), text: str(c.widget?.text, 120), url: '' };
+  const tile = { label: str(c.tile?.label, 24), url: '', icon: NAV_ICONS.includes(c.tile?.icon) ? c.tile.icon : 'apps' };
+  const kiosk = { autoStart: c.kiosk?.autoStart === true, launcher: c.kiosk?.launcher === true };
+  const integrity = { cloudProjectNumber: /^\d{6,15}$/.test(String(c.integrity?.cloudProjectNumber || '')) ? Number(c.integrity.cloudProjectNumber) : 0 };
+  const nfc = { aids: (Array.isArray(c.nfc?.aids) ? c.nfc.aids : []).map((a) => String(a).toUpperCase()).filter((a) => /^[0-9A-F]{10,32}$/.test(a)).slice(0, 10) };
+  const altIconFileIds = features.altIcons ? (Array.isArray(c.altIconFileIds) ? c.altIconFileIds : []).map((x) => str(x, 40)).filter(Boolean).slice(0, 3) : [];
+  if (features.altIcons && !altIconFileIds.length) throw new HttpError(400, 'Unggah minimal satu ikon alternatif');
+
   const onesignal = { appId: str(c.onesignal?.appId, 36) };
   if (features.onesignal && !/^[0-9a-f-]{36}$/i.test(onesignal.appId)) throw new HttpError(400, 'OneSignal App ID tidak valid');
   const tawk = { propertyId: str(c.tawk?.propertyId, 40).replace(/[^\w]/g, ''), widgetId: str(c.tawk?.widgetId, 40).replace(/[^\w]/g, '') || 'default' };
@@ -110,6 +199,7 @@ export function sanitizeConfig(c) {
   };
   if (features.fab && fab.action === 'url' && !fab.url) throw new HttpError(400, 'Tombol mengambang butuh URL');
   if (features.fab && fab.action === 'scan') features.qrScanner = true;
+  widget.url = navUrl(c.widget?.url); tile.url = navUrl(c.tile?.url);
   const shortcuts = (Array.isArray(c.shortcuts) ? c.shortcuts : []).slice(0, 4)
     .map((x) => ({ label: str(x?.label, 24), url: navUrl(x?.url) })).filter((x) => x.label && x.url);
   const linkRules = (Array.isArray(c.linkRules) ? c.linkRules : []).slice(0, 20)
@@ -142,7 +232,8 @@ export function sanitizeConfig(c) {
     platforms, bottomNav, fab, shortcuts, linkRules, desktop,
     customCss: features.customCode ? String(c.customCss || '').slice(0, 20_000) : '',
     customJs: features.customCode ? String(c.customJs || '').slice(0, 50_000) : '',
-    fcmFileId: features.fcm ? str(c.fcmFileId, 40) : '',
+    fcmFileId: features.fcm || features.firebaseAnalytics || features.crashlytics ? str(c.fcmFileId, 40) : '',
+    ads, google, facebook, appLock, widget, tile, kiosk, integrity, nfc, altIconFileIds,
     userAgentSuffix: str(c.userAgentSuffix, 40).replace(/[^\w.\-/ ]/g, '')
   };
 }
