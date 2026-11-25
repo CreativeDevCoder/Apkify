@@ -97,7 +97,7 @@ export function MarketAdmin({ notify }) {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography fontWeight={700} component={RouterLink} to={`/market/${l.id}`} sx={{ color: 'inherit' }}>{l.title}</Typography>
                 <Typography variant="body2">{l.category} • {rupiah(l.price)} • {l.sellerName} ({l.whatsapp || l.email})</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line', maxHeight: 120, overflow: 'auto' }}>{l.description}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line', display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{l.description}</Typography>
               </Box>
             </Stack>
             <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">

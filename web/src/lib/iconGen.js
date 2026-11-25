@@ -24,7 +24,7 @@ export function canvasToBlob(canvas, type = 'image/png', q) {
 }
 
 /** Ikon teks (inisial) dengan gradien */
-export function generateLetterIcon({ text = 'A', bg1 = '#4f46e5', bg2 = '#06b6d4', fg = '#ffffff', size = 512, radius = 0.22 } = {}) {
+export function generateLetterIcon({ text = 'A', bg1 = '#0073e6', bg2 = '#0a4fa3', fg = '#ffffff', size = 512, radius = 0.22 } = {}) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');

@@ -6,6 +6,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import FileDrop from '../FileDrop';
 import { api, fileUrl } from '../../lib/api';
 import { NAV_ICONS } from './icons';
+import { MONO } from '../../theme';
 
 // [kunci, label, contoh API JS / penjelasan, catatan izin]
 export const NATIVE_GROUPS = [
@@ -209,33 +210,31 @@ export function AdsSection({ cfg, set, Toggle, error }) {
           <TextField select label="Jaringan iklan" value={net} onChange={(e) => set('ads.network', e.target.value)}>
             {AD_NETWORKS.map(([k, label, hint]) => <MenuItem key={k} value={k}><Stack><span>{label}</span><Typography variant="caption" color="text.secondary">{hint}</Typography></Stack></MenuItem>)}
           </TextField>
-          <Grid container spacing={2}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             {FIELDS[net].map(([k, label, ph]) => (
-              <Grid item xs={12} sm={6} key={k}>
-                <TextField fullWidth label={label} placeholder={ph || ''} value={ids[k] || ''} onChange={(e) => set(`ads.${net}.${k}`, e.target.value.trim())} />
-              </Grid>
+              <TextField key={k} label={label} placeholder={ph || ''} value={ids[k] || ''} onChange={(e) => set(`ads.${net}.${k}`, e.target.value.trim())} InputProps={{ sx: { fontFamily: MONO, fontSize: 12.5 } }} />
             ))}
-          </Grid>
+          </Box>
           {(net === 'unity' || net === 'startio') && (
             <FormControlLabel control={<Switch checked={!!ids.testMode} onChange={(e) => set(`ads.${net}.testMode`, e.target.checked)} />} label="Mode uji (iklan percobaan)" />
           )}
           {error && <Alert severity="error">{error}</Alert>}
           <Divider />
           <Typography variant="subtitle2">Format & penempatan</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+            <Box>
               <TextField select fullWidth label="Banner" value={a.banner} onChange={(e) => set('ads.banner', e.target.value)}>
                 <MenuItem value="bottom">Bawah</MenuItem><MenuItem value="top">Atas</MenuItem><MenuItem value="none">Tidak ada</MenuItem>
               </TextField>
-            </Grid>
+            </Box>
             {net === 'admob' && (
-              <Grid item xs={12} sm={4}>
+              <Box>
                 <TextField select fullWidth label="Gaya banner" value={a.bannerStyle} onChange={(e) => set('ads.bannerStyle', e.target.value)}>
                   <MenuItem value="adaptive">Adaptif</MenuItem><MenuItem value="collapsible">Collapsible (CTR tinggi)</MenuItem><MenuItem value="native">Native (menyatu dengan UI)</MenuItem>
                 </TextField>
-              </Grid>
+              </Box>
             )}
-          </Grid>
+          </Box>
           <FormControlLabel control={<Switch checked={a.interstitial} onChange={(e) => set('ads.interstitial', e.target.checked)} />} label="Interstitial otomatis saat pindah halaman" />
           {a.interstitial && (
             <Box>

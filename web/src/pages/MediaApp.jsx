@@ -72,7 +72,7 @@ export default function MediaApp() {
   const nav = useNavigate();
   const [type, setType] = useState('image');
   const [title, setTitle] = useState('Koleksi Saya');
-  const [color, setColor] = useState('#4f46e5');
+  const [color, setColor] = useState('#0073e6');
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -127,7 +127,7 @@ export default function MediaApp() {
             <Typography variant="caption" color="text.secondary">Total maks 45 MB • urutan sesuai daftar</Typography>
           </Box>
           {files.length > 0 && (
-            <List dense sx={{ maxHeight: 280, overflow: 'auto' }}>
+            <List dense>
               {files.map((f, i) => (
                 <ListItem key={i} secondaryAction={<IconButton onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}><DeleteIcon /></IconButton>}>
                   <ListItemText primary={`${i + 1}. ${f.name}`} secondary={`${(f.size / 1048576).toFixed(2)} MB`} />

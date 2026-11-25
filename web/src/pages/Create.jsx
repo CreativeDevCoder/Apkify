@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import {
-  Container, Typography, Card, CardContent, Tabs, Tab, TextField, Grid, Stack, Button, Switch,
+  Container, Typography, Tabs, Tab, TextField, Grid, Stack, Button, Switch,
   FormControlLabel, Alert, Box, MenuItem, Divider, LinearProgress, Avatar, ToggleButtonGroup,
-  ToggleButton, Accordion, AccordionSummary, AccordionDetails, IconButton, Chip, Slider, Tooltip, Link
+  ToggleButton, Accordion, AccordionSummary, AccordionDetails, IconButton, Slider, Link
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import LanguageIcon from '@mui/icons-material/Language';
-import FolderZipIcon from '@mui/icons-material/FolderZip';
-import CodeIcon from '@mui/icons-material/Code';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { ref, get } from 'firebase/database';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +22,11 @@ import LivePreview from '../components/create/LivePreview';
 import { BottomNavSection, PluginsSection, CodeSection, DesktopSection } from '../components/create/NativeSections';
 import { NativePluginsSection, AdsSection, NATIVE_GROUPS } from '../components/create/NativePlugins';
 import JSZip from 'jszip';
+import { useMediaQuery } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import { Eyebrow, CodeBlock } from '../components/ui';
+import { MONO } from '../theme';
+import { PLATFORM_INFO } from '../components/create/PlatformPicker';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { validatePackage, suggestPackage, normalizeUrl, validateUrl, isHex } from '../lib/validators';
 import { generateLetterIcon, loadImage, fileToDataUrl, drawSquare, canvasToBlob } from '../lib/iconGen';
@@ -37,7 +37,7 @@ const DEFAULT = {
   versionName: '1.0.0',
   versionCodeOverride: '',
   source: { type: 'url', url: '' },
-  colors: { primary: '#4f46e5', statusBar: '#3730a3', accent: '#06b6d4', splashBg: '#ffffff' },
+  colors: { primary: '#0073e6', statusBar: '#005bb5', accent: '#ff8a00', splashBg: '#ffffff' },
   splash: { durationMs: 0 },
   progress: { style: 'bar' },
   orientation: 'unspecified',
@@ -131,10 +131,35 @@ const MAX_HTML_KB = 500;
 function Toggle({ k, label, hint, f, set }) {
   return (
     <FormControlLabel
-      control={<Switch checked={!!f[k]} onChange={(e) => set(`features.${k}`, e.target.checked)} />}
-      label={<Stack direction="row" alignItems="center" spacing={0.5}><span>{label}</span>{hint && <Tooltip title={hint}><HelpOutlineIcon sx={{ fontSize: 16, color: 'text.secondary' }} /></Tooltip>}</Stack>}
+      sx={{ alignItems: 'flex-start', m: 0, py: 0.75, pr: 1, width: '100%' }}
+      control={<Switch checked={!!f[k]} onChange={(e) => set(`features.${k}`, e.target.checked)} sx={{ mt: 0.25, flexShrink: 0 }} />}
+      label={(
+        <Box>
+          <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.5 }}>{label}</Typography>
+          {hint && <Typography variant="caption" component="div" sx={{ overflowWrap: 'anywhere', fontFamily: /Apkify\./.test(hint) ? MONO : undefined, fontSize: /Apkify\./.test(hint) ? 11 : undefined, mt: 0.25 }}>{hint}</Typography>}
+        </Box>
+      )}
     />
   );
+}
+
+/** Langkah utama: nomor mono, judul & deskripsi di kiri, isi di kanan (desktop). */
+function Step({ id, n, title, desc, children }) {
+  return (
+    <Box component="section" id={id} aria-labelledby={`${id}-t`} sx={{ scrollMarginTop: 80, py: { xs: 4, md: 5 }, borderTop: 1, borderColor: 'divider' }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography sx={{ fontFamily: MONO, fontSize: 12, color: 'primary.main', mb: 0.75 }}>{String(n).padStart(2, '0')}</Typography>
+        <Typography id={`${id}-t`} variant="h4" component="h2">{title}</Typography>
+        {desc && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, maxWidth: 560 }}>{desc}</Typography>}
+      </Box>
+      {children}
+    </Box>
+  );
+}
+
+/** Sub-judul kecil di dalam langkah. */
+function Label({ children, sx }) {
+  return <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, ...sx }}>{children}</Typography>;
 }
 
 /** Konfigurasi iklan lama (admob + interstitial) -> format multi-jaringan rilis 5 */
@@ -153,13 +178,16 @@ function migrateAds(c) {
   return out;
 }
 
-function Section({ title, children, defaultExpanded = false, chip }) {
+/** Baris pengaturan lanjutan yang bisa dibuka (daftar bergaris rambut, bukan tumpukan kartu). */
+function Section({ title, children, defaultExpanded = false, chip, id }) {
   return (
-    <Accordion defaultExpanded={defaultExpanded} disableGutters sx={{ mb: 1.5, border: 1, borderColor: 'divider', '&:before': { display: 'none' }, borderRadius: 2 }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography fontWeight={700}>{title}</Typography>{chip && <Chip size="small" label={chip} sx={{ ml: 1 }} />}
+    <Accordion defaultExpanded={defaultExpanded} id={id} TransitionProps={{ unmountOnExit: true }}
+      sx={{ borderTop: 1, borderColor: 'divider', scrollMarginTop: 80, '&:last-of-type': { borderBottom: 1, borderColor: 'divider' } }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 20 }} />} sx={{ px: 0, minHeight: 56, '& .MuiAccordionSummary-content': { my: 1.5, alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap' }, '&:hover .sec-t': { color: 'primary.main' } }}>
+        <Typography className="sec-t" variant="body1" sx={{ fontWeight: 600, transition: 'color 140ms' }}>{title}</Typography>
+        {chip && <Typography variant="caption" sx={{ fontFamily: MONO, fontSize: 11 }}>{chip}</Typography>}
       </AccordionSummary>
-      <AccordionDetails>{children}</AccordionDetails>
+      <AccordionDetails sx={{ px: 0, pt: 0, pb: 3 }}>{children}</AccordionDetails>
     </Accordion>
   );
 }
@@ -168,6 +196,7 @@ export default function Create() {
   const { appId } = useParams();
   const [qs] = useSearchParams();
   const { user, isAnon, loading: authLoading, ensureUser } = useAuth();
+  const wide = useMediaQuery((t) => t.breakpoints.up('md'));
   const nav = useNavigate();
   const [cfg, setCfg] = useState(() => ({
     ...structuredClone(DEFAULT),
@@ -444,23 +473,51 @@ export default function Create() {
 
   const splashImg = splashMode === 'custom' ? splashPreview : iconPreview;
 
+  const chosen = Object.entries(cfg.platforms || {}).filter(([, v]) => v).map(([k]) => PLATFORM_INFO[k]?.label || k);
+  const outputs = Object.entries(cfg.platforms || {}).filter(([, v]) => v).map(([k]) => PLATFORM_INFO[k]?.out).filter(Boolean).join(' · ');
+  const errCount = Object.keys(errors).length;
+  const NAV = [['sumber', 'Sumber konten'], ['platform', 'Platform'], ['identitas', 'Identitas'], ['tampilan', 'Ikon & warna'], ['lanjutan', 'Lanjutan']];
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>{appId ? 'Perbarui aplikasi' : 'Buat aplikasi Android'}</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Isi data di bawah, lalu klik Build. Hasilnya APK (dipasang langsung) dan AAB (Google Play). Bagian lanjutan opsional — nilai bawaan sudah aman.</Typography>
+    <Box>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 4.5 } }}>
+          <Eyebrow sx={{ mb: 1 }}>{appId ? 'Studio · perbarui' : 'Studio · aplikasi baru'}</Eyebrow>
+          <Typography variant="h3" component="h1">{appId ? (cfg.name || 'Perbarui aplikasi') : 'Buat aplikasi'}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, maxWidth: 640 }}>
+            Isi empat langkah utama lalu build. Pengaturan lanjutan opsional — nilai bawaannya sudah aman.
+          </Typography>
+        </Container>
+      </Box>
+      <Container maxWidth="xl">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1fr) 300px', lg: '180px minmax(0,1fr) 320px' }, columnGap: { md: 5, lg: 6 } }}>
+          {/* Navigasi langkah */}
+          <Box component="nav" aria-label="Langkah" sx={{ display: { xs: 'none', lg: 'block' } }}>
+            <Box sx={{ position: 'sticky', top: 80, pt: 5 }}>
+              {NAV.map(([id, l], i) => (
+                <Box key={id} component="a" href={`#${id}`} sx={{
+                  display: 'flex', gap: 1.25, alignItems: 'baseline', py: 0.875, textDecoration: 'none', color: 'text.secondary', fontSize: 13,
+                  '&:hover': { color: 'text.primary' }
+                }}>
+                  <Box component="span" sx={{ fontFamily: MONO, fontSize: 11, color: 'text.disabled' }}>{String(i + 1).padStart(2, '0')}</Box>{l}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          <Box sx={{ minWidth: 0, maxWidth: 760 }}>
       {(!user || isAnon) && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Anda bisa build tanpa akun (mode tamu, batas lebih kecil). <b>Daftar gratis</b> agar aplikasi, riwayat, dan keystore tersimpan permanen serta mendapat email saat build selesai.
+        <Alert severity="info" sx={{ mt: 4 }}>
+          Mode tamu: build tetap bisa, dengan batas lebih kecil. <Link component={RouterLink} to="/register?next=/create">Daftar gratis</Link> agar aplikasi, riwayat, dan keystore tersimpan permanen.
         </Alert>
       )}
 
       {/* 1. SUMBER */}
-      <Card sx={{ mb: 2 }}><CardContent>
-        <Typography variant="h6" gutterBottom>1. Sumber konten</Typography>
-        <Tabs value={cfg.source.type} onChange={(_, v) => set('source.type', v)} sx={{ mb: 2 }} variant="fullWidth">
-          <Tab value="url" icon={<LanguageIcon />} iconPosition="start" label="Website" />
-          <Tab value="zip" icon={<FolderZipIcon />} iconPosition="start" label="ZIP" />
-          <Tab value="html" icon={<CodeIcon />} iconPosition="start" label="HTML" />
+      <Step id="sumber" n={1} title="Sumber konten" desc="Dari mana isi aplikasi diambil.">
+        <Tabs value={cfg.source.type} onChange={(_, v) => set('source.type', v)} sx={{ mb: 2.5 }}>
+          <Tab value="url" label="Website" />
+          <Tab value="zip" label="ZIP / kode sumber" />
+          <Tab value="html" label="HTML" />
         </Tabs>
         {cfg.source.type === 'url' && (<>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'flex-start' }}>
@@ -487,20 +544,17 @@ export default function Create() {
         {cfg.source.type === 'html' && (
           <TextField multiline minRows={8} maxRows={20} label="Kode HTML" value={html} onChange={(e) => setHtml(e.target.value)}
             placeholder="<!doctype html><html>…</html>" helperText={`Satu halaman HTML (CSS/JS inline). Maks ${MAX_HTML_KB} KB.`}
-            InputProps={{ sx: { fontFamily: 'monospace', fontSize: 13 } }} />
+            InputProps={{ sx: { fontFamily: MONO, fontSize: 12.5 } }} />
         )}
-      </CardContent></Card>
+      </Step>
 
       {/* PLATFORM */}
-      <Card sx={{ mb: 2 }}><CardContent>
-        <Typography variant="h6" gutterBottom>Platform target</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Satu konfigurasi, banyak platform — semua dibangun paralel di cloud.</Typography>
+      <Step id="platform" n={2} title="Platform" desc="Satu konfigurasi, banyak platform — semuanya dibangun paralel di cloud.">
         <PlatformPicker value={cfg.platforms} anon={!user || isAnon} onChange={(v) => set('platforms', v)} />
-      </CardContent></Card>
+      </Step>
 
-      {/* 2. IDENTITAS */}
-      <Card sx={{ mb: 2 }}><CardContent>
-        <Typography variant="h6" gutterBottom>2. Identitas aplikasi</Typography>
+      {/* 3. IDENTITAS */}
+      <Step id="identitas" n={3} title="Identitas" desc="Nama, versi, dan ID unik aplikasi.">
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField label="Nama aplikasi" value={cfg.name} onChange={(e) => set('name', e.target.value)} error={!!cfg.name && !!errors.name} helperText={errors.name || 'Tampil di bawah ikon HP'} />
@@ -533,14 +587,13 @@ export default function Create() {
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           Penandatanganan: keystore dibuat otomatis per package. Punya keystore sendiri? Unggah dari <Link component={RouterLink} to="/dashboard">Studio</Link> → ikon kunci (butuh akun).
         </Typography>
-      </CardContent></Card>
+      </Step>
 
-      {/* 3. IKON, SPLASH, WARNA */}
-      <Card sx={{ mb: 2 }}><CardContent>
-        <Typography variant="h6" gutterBottom>3. Ikon, splash & warna</Typography>
+      {/* 4. IKON, SPLASH, WARNA */}
+      <Step id="tampilan" n={4} title="Ikon, splash & warna" desc="Kesan pertama aplikasi Anda di layar HP.">
         <Grid container spacing={3}>
           <Grid item xs={12} sm={7}>
-            <Typography fontWeight={600} gutterBottom>Ikon</Typography>
+            <Label>Ikon</Label>
             <ToggleButtonGroup exclusive size="small" value={iconMode} onChange={(_, v) => v && setIconMode(v)} sx={{ mb: 1 }}>
               <ToggleButton value="generate">Buat otomatis</ToggleButton>
               <ToggleButton value="upload">Upload</ToggleButton>
@@ -548,47 +601,53 @@ export default function Create() {
             </ToggleButtonGroup>
             {iconMode === 'upload' && <FileDrop accept="image/png,image/jpeg,image/webp" file={iconFile} onFile={setIconFile} hint="PNG/JPG persegi, ideal 512×512" />}
 
-            <Typography fontWeight={600} sx={{ mt: 2 }} gutterBottom>Splash screen</Typography>
+            <Label sx={{ mt: 3 }}>Splash screen</Label>
             <ToggleButtonGroup exclusive size="small" value={splashMode} onChange={(_, v) => v && setSplashMode(v)} sx={{ mb: 1 }}>
               <ToggleButton value="icon">Pakai ikon</ToggleButton>
               <ToggleButton value="custom">Gambar sendiri</ToggleButton>
               {cfg.splash.fileId && <ToggleButton value="keep">Splash lama</ToggleButton>}
             </ToggleButtonGroup>
             {splashMode === 'custom' && <FileDrop accept="image/png,image/jpeg,image/webp" file={splashFile} onFile={setSplashFile} hint="Logo PNG transparan disarankan (ditampilkan dalam lingkaran)" />}
-            <Typography variant="body2" sx={{ mt: 1 }}>Durasi minimum: {cfg.splash.durationMs ? `${cfg.splash.durationMs} ms` : 'Bawaan sistem'}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>Durasi minimum: <Box component="span" className="tnum" sx={{ color: 'text.primary', fontWeight: 500 }}>{cfg.splash.durationMs ? `${cfg.splash.durationMs} ms` : 'bawaan sistem'}</Box></Typography>
             <Slider value={cfg.splash.durationMs} min={0} max={5000} step={250} onChange={(_, v) => set('splash.durationMs', v)} />
           </Grid>
           <Grid item xs={12} sm={5}>
             {/* Pratinjau splash */}
-            <Box sx={{ mx: 'auto', width: 180, height: 340, border: '6px solid #111', borderRadius: 4, bgcolor: cfg.colors.splashBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
-              <Avatar src={splashImg} sx={{ width: 96, height: 96, bgcolor: cfg.colors.primary }}>{iconMode === 'keep' && !splashImg ? '' : (cfg.name || 'A')[0]}</Avatar>
+            <Box sx={{ mx: 'auto', width: 150, height: 300, border: '5px solid', borderColor: (t) => (t.palette.mode === 'light' ? '#16181c' : '#2a2e35'), borderRadius: '22px', bgcolor: cfg.colors.splashBg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
+              <Avatar src={splashImg} sx={{ width: 72, height: 72, bgcolor: cfg.colors.primary }}>{iconMode === 'keep' && !splashImg ? '' : (cfg.name || 'A')[0]}</Avatar>
               <Typography variant="caption" sx={{ color: isHex(cfg.colors.splashBg) && parseInt(cfg.colors.splashBg.slice(1), 16) > 0x888888 ? '#333' : '#eee' }}>{cfg.name || 'Nama Aplikasi'}</Typography>
             </Box>
-            <Typography variant="caption" display="block" textAlign="center" color="text.secondary">Pratinjau splash</Typography>
+            <Typography variant="caption" display="block" textAlign="center" sx={{ mt: 1 }}>Pratinjau splash</Typography>
           </Grid>
         </Grid>
-        <Divider sx={{ my: 2 }} />
-        <Typography fontWeight={600} gutterBottom>Skema warna Material</Typography>
+        <Divider sx={{ my: 3 }} />
+        <Label>Warna</Label>
         <Grid container spacing={2}>
           <Grid item xs={6} sm={3}><ColorField label="Utama" value={cfg.colors.primary} onChange={(v) => set('colors.primary', v)} /></Grid>
           <Grid item xs={6} sm={3}><ColorField label="Status bar (gelap)" value={cfg.colors.statusBar} onChange={(v) => set('colors.statusBar', v)} /></Grid>
           <Grid item xs={6} sm={3}><ColorField label="Aksen" value={cfg.colors.accent} onChange={(v) => set('colors.accent', v)} /></Grid>
           <Grid item xs={6} sm={3}><ColorField label="Latar splash" value={cfg.colors.splashBg} onChange={(v) => set('colors.splashBg', v)} /></Grid>
         </Grid>
-        <Stack direction="row" sx={{ mt: 1, borderRadius: 1, overflow: 'hidden', height: 16 }}>
+        <Stack direction="row" sx={{ mt: 1.5, borderRadius: 1, overflow: 'hidden', height: 6 }}>
           {[cfg.colors.statusBar, cfg.colors.primary, cfg.colors.accent].map((c, i) => <Box key={i} sx={{ flex: 1, bgcolor: isHex(c) ? c : '#ccc' }} />)}
         </Stack>
         <TextField select label="Indikator loading" value={cfg.progress.style} onChange={(e) => set('progress.style', e.target.value)} sx={{ mt: 2 }}>
           <MenuItem value="bar">Garis di atas</MenuItem><MenuItem value="spinner">Lingkaran di tengah</MenuItem><MenuItem value="none">Tanpa indikator</MenuItem>
         </TextField>
-      </CardContent></Card>
+      </Step>
 
-      <Section title="Pratinjau langsung" defaultExpanded>
-        <LivePreview cfg={cfg} html={html} iconPreview={iconPreview} frameBlocked={meta?.frameBlocked} />
-      </Section>
+      {!wide && (
+        <Section title="Pratinjau langsung" chip="toolbar · navigasi · FAB">
+          <LivePreview cfg={cfg} html={html} iconPreview={iconPreview} frameBlocked={meta?.frameBlocked} width={260} />
+        </Section>
+      )}
 
-      {/* 4. LANJUTAN */}
-      <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>4. Pengaturan lanjutan</Typography>
+      {/* 5. LANJUTAN */}
+      <Box id="lanjutan" sx={{ scrollMarginTop: 80, pt: { xs: 4, md: 5 }, pb: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Typography sx={{ fontFamily: MONO, fontSize: 12, color: 'primary.main', mb: 0.75 }}>05</Typography>
+        <Typography variant="h4" component="h2">Pengaturan lanjutan</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>Opsional. Buka yang Anda perlukan saja.</Typography>
+      </Box>
 
       <Section title="Navigasi bawah & tombol mengambang" chip="baru">
         <BottomNavSection cfg={cfg} set={set} Toggle={T} />
@@ -698,7 +757,7 @@ export default function Create() {
       <Section title="Developer: JavaScript API, Supabase, Remote Update">
         <Toggle k="jsApi" label="JavaScript APIs (plugin native)" f={f} set={set} />
         {f.jsApi && (
-          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2, fontSize: 12, overflow: 'auto', mt: 0 }}>{`document.addEventListener('apkifyready', async () => {
+          <CodeBlock sx={{ mt: 1 }}>{`document.addEventListener('apkifyready', async () => {
   Apkify.toast('Halo');          Apkify.vibrate(80);
   Apkify.share('Teks');          Apkify.copy('Teks');
   Apkify.open('https://...');    Apkify.keepScreenOn(true);
@@ -717,7 +776,7 @@ export default function Create() {
   const r = await Apkify.ads.showRewarded();       // {rewarded, amount}
   Apkify.on('scan', (d) => console.log(d.data));  // scanner Zebra/Honeywell
 });
-document.addEventListener('apkifyshare', (e) => console.log(e.detail.text));`}</Box>
+document.addEventListener('apkifyshare', (e) => console.log(e.detail.text));`}</CodeBlock>
         )}
         <Toggle k="supabase" label="Backend Supabase" f={f} set={set} />
         {f.supabase && (
@@ -735,16 +794,45 @@ document.addEventListener('apkifyshare', (e) => console.log(e.detail.text));`}</
         )}
       </Section>
 
-      {error && <Alert severity="error" sx={{ my: 2 }}>{error}</Alert>}
-      {busy && (
-        <Box sx={{ my: 2 }}>
-          <Typography variant="body2" gutterBottom>{progress.label}</Typography>
-          <LinearProgress variant={progress.value ? 'determinate' : 'indeterminate'} value={progress.value} />
+      {error && <Alert severity="error" sx={{ mt: 3 }}>{error}</Alert>}
+
+      {/* Bilah aksi lengket: ringkasan + tombol build selalu terlihat */}
+      <Box sx={{
+        position: 'sticky', bottom: 0, zIndex: 5, mt: 4, mx: { xs: -2.5, sm: 0 }, px: { xs: 2.5, sm: 2 }, py: 1.5,
+        borderTop: 1, borderLeft: { sm: 1 }, borderRight: { sm: 1 }, borderColor: 'divider', borderRadius: { sm: '8px 8px 0 0' },
+        bgcolor: (t) => alpha(t.palette.background.paper, 0.9), backdropFilter: 'blur(10px)'
+      }}>
+        {busy && (
+          <Box sx={{ mb: 1.25 }}>
+            <Typography variant="caption" component="div" sx={{ mb: 0.5 }}>{progress.label}</Typography>
+            <LinearProgress variant={progress.value ? 'determinate' : 'indeterminate'} value={progress.value} />
+          </Box>
+        )}
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{cfg.name || 'Tanpa nama'} <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>· {chosen.join(', ') || 'belum ada platform'}</Box></Typography>
+            <Typography sx={{ fontFamily: MONO, fontSize: 11, color: 'text.secondary' }} noWrap>
+              {errCount ? `${errCount} isian belum lengkap` : outputs || '—'}
+            </Typography>
+          </Box>
+          <Button size="large" variant="contained" disabled={busy} onClick={submit} sx={{ flexShrink: 0 }}>
+            {busy ? 'Memproses…' : appId ? 'Build versi baru' : 'Build aplikasi'}
+          </Button>
+        </Stack>
+      </Box>
+          </Box>
+
+          {/* Pratinjau lengket */}
+          {wide && (
+            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Box sx={{ position: 'sticky', top: 80, pt: 5 }}>
+                <Typography variant="overline" color="text.secondary" component="div" sx={{ mb: 2, textAlign: 'center' }}>Pratinjau langsung</Typography>
+                <LivePreview cfg={cfg} html={html} iconPreview={iconPreview} frameBlocked={meta?.frameBlocked} width={260} />
+              </Box>
+            </Box>
+          )}
         </Box>
-      )}
-      <Button size="large" variant="contained" fullWidth startIcon={<RocketLaunchIcon />} disabled={busy} onClick={submit} sx={{ mt: 2 }}>
-        {busy ? 'Memproses…' : 'Build APK & AAB'}
-      </Button>
-    </Container>
+      </Container>
+    </Box>
   );
 }

@@ -142,7 +142,7 @@ export function AnalyticsDialog({ app, onClose }) {
           </Stack>
           <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ height: 140 }}>
             {d.days.map((x) => (
-              <div key={x.day} title={`${x.day.slice(6)}/${x.day.slice(4, 6)}: ${x.active}`} style={{ flex: 1, height: `${Math.max(2, (x.active / max) * 100)}%`, background: '#4f46e5', borderRadius: 3, opacity: x.active ? 1 : 0.2 }} />
+              <div key={x.day} title={`${x.day.slice(6)}/${x.day.slice(4, 6)}: ${x.active}`} style={{ flex: 1, height: `${Math.max(2, (x.active / max) * 100)}%`, background: 'var(--apk-primary, #0073e6)', borderRadius: 1, opacity: x.active ? 1 : 0.2 }} />
             ))}
           </Stack>
           <Typography variant="caption" color="text.secondary">Pengguna aktif harian (1 perangkat dihitung sekali per hari). Data anonim, tanpa identitas pengguna.</Typography>

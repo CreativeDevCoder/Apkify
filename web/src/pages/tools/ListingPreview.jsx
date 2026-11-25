@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, TextField, Grid, Box, Avatar, Button, Chip, Rating } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import FileDrop from '../../components/FileDrop';
 import { fileToDataUrl } from '../../lib/iconGen';
 
@@ -15,9 +16,8 @@ export default function ListingPreview() {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Listing Preview</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Pratinjau kira-kira tampilan halaman aplikasi Anda di Google Play sebelum dipublikasikan (tampilan asli bisa sedikit berbeda).</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Listing Preview">Pratinjau kira-kira tampilan halaman aplikasi Anda di Google Play sebelum dipublikasikan (tampilan asli bisa sedikit berbeda).</ToolHeader>
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Card><CardContent><Stack spacing={2}>
@@ -35,8 +35,8 @@ export default function ListingPreview() {
         </Grid>
         <Grid item xs={12} md={6}>
           {/* Mockup halaman Play Store di bingkai HP */}
-          <Box sx={{ mx: 'auto', maxWidth: 380, border: '10px solid #111', borderRadius: 6, overflow: 'hidden', bgcolor: '#fff', color: '#202124', fontFamily: 'Roboto, system-ui, sans-serif' }}>
-            <Box sx={{ height: 600, overflowY: 'auto' }}>
+          <Box sx={{ mx: 'auto', maxWidth: 380, border: '7px solid #16181c', borderRadius: '30px', overflow: 'hidden', bgcolor: '#fff', color: '#202124', fontFamily: 'Roboto, system-ui, sans-serif' }}>
+            <Box>
               {graphic && <Box component="img" src={graphic} sx={{ width: '100%', aspectRatio: '1024/500', objectFit: 'cover', display: 'block' }} />}
               <Box sx={{ p: 2 }}>
                 <Stack direction="row" spacing={2} alignItems="center">
@@ -53,13 +53,13 @@ export default function ListingPreview() {
                   <Box><b style={{ color: '#202124' }}>E</b><br />Semua umur</Box>
                 </Stack>
                 <Button fullWidth variant="contained" sx={{ bgcolor: '#01875f', borderRadius: 2, '&:hover': { bgcolor: '#016e4e' } }}>Instal</Button>
-                <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', my: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, my: 2 }}>
                   {(shots.length ? shots : [null, null, null]).map((s, i) => (
-                    <Box key={i} sx={{ flex: '0 0 auto', width: 110, height: 200, borderRadius: 2, bgcolor: '#eee', overflow: 'hidden' }}>
+                    <Box key={i} sx={{ aspectRatio: '9 / 16', borderRadius: 2, bgcolor: '#eee', overflow: 'hidden' }}>
                       {s && <img src={s} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                     </Box>
-                  ))}
-                </Stack>
+                  )).slice(0, 3)}
+                </Box>
                 <Typography fontWeight={500} fontSize={18}>Tentang aplikasi ini</Typography>
                 <Typography fontSize={14} color="#5f6368" sx={{ my: 1 }}>{f.short.slice(0, LIM.short)}</Typography>
                 {more && <Typography fontSize={14} color="#5f6368" sx={{ whiteSpace: 'pre-line' }}>{f.full.slice(0, LIM.full)}</Typography>}

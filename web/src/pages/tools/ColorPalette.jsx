@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Container, Typography, Card, CardContent, Grid, Box, Stack, Snackbar } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import ColorField from '../../components/ColorField';
 import { isHex } from '../../lib/validators';
 import FileDrop from '../../components/FileDrop';
@@ -82,8 +83,8 @@ export default function ColorPalette() {
   const copy = (c) => { navigator.clipboard?.writeText(c); setCopied(c); };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Color Palette</Typography>
+    <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Color Palette" />
       <Card sx={{ mb: 2 }}><CardContent><Stack spacing={2}>
         <FileDrop accept="image/*" label="Ekstrak warna dari logo (opsional)" onFile={async (f) => { const cs = await extractColors(f); setExtracted(cs); if (cs[0]) setBase(cs[0]); }} />
         {extracted.length > 0 && (

@@ -7,6 +7,7 @@ import {
 import { ref, get, update, serverTimestamp } from 'firebase/database';
 import { auth, db, googleProvider, githubProvider } from '../firebase';
 import { clearCache } from '../lib/cache';
+import { PREVIEW, previewUser } from '../lib/previewFixtures';
 
 const AuthCtx = createContext(null);
 
@@ -51,7 +52,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [ver, setVer] = useState(0); // paksa render ulang setelah akun tamu ditautkan
 
-  useEffect(() => onAuthStateChanged(auth, async (u) => {
+  useEffect(() => PREVIEW ? (setUser(previewUser), setLoading(false), undefined) : onAuthStateChanged(auth, async (u) => {
     setUser(u);
     setIsAdmin(false);
     if (u) {

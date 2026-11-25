@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Container, Typography, Card, CardContent, Stack, TextField, Button, Grid, MenuItem, IconButton, Box, Alert } from '@mui/material';
+import { Container, Card, CardContent, Stack, TextField, Button, Grid, MenuItem, IconButton, Box, Alert } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import DeleteIcon from '@mui/icons-material/Delete';
 import JSZip from 'jszip';
 import FileDrop from '../../components/FileDrop';
@@ -62,9 +63,8 @@ export default function ScreenshotMockup() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Screenshot Mockups</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Bingkai HP + judul untuk screenshot Play Store. Play Console butuh minimal 2 screenshot.</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Screenshot Mockups">Bingkai HP + judul untuk screenshot Play Store. Play Console butuh minimal 2 screenshot.</ToolHeader>
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
           <Card><CardContent>

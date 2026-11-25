@@ -3,6 +3,7 @@ import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Container, Typography, Card, CardContent, TextField, Button, Stack, Chip, Alert, Grid, Box, Tabs, Tab, LinearProgress, FormControlLabel, Checkbox
 } from '@mui/material';
+import { ToolHeader } from '../components/ui';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -63,13 +64,8 @@ export default function AiStudio() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-        <AutoAwesomeIcon color="secondary" />
-        <Typography variant="h4">AI Studio</Typography>
-        <Chip size="small" color="secondary" label="baru" />
-      </Stack>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Jelaskan aplikasi yang Anda inginkan. AI membuat kode HTML-nya, Anda pratinjau, perbaiki, lalu jadikan APK — semuanya berjalan offline di HP.</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="AI Studio" crumb={null}>Jelaskan aplikasi yang Anda inginkan. AI menulis kode HTML-nya, Anda pratinjau dan perbaiki, lalu jadikan aplikasi yang berjalan offline.</ToolHeader>
 
       {!canUse && (
         <Alert severity="info" sx={{ mb: 2 }} action={<Button color="inherit" component={RouterLink} to="/register?next=/ai-studio">Daftar</Button>}>

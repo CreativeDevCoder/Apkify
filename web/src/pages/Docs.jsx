@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Container, Typography, Grid, List, ListItemButton, ListItemText, Card, CardContent, TextField,
+  Container, Typography, TextField,
   Accordion, AccordionSummary, AccordionDetails, Box, useMediaQuery
 } from '@mui/material';
+import PageHeader from '../components/PageHeader';
+import { EmptyState } from '../components/ui';
+import { MONO } from '../theme';
+import { Link as RouterLink } from 'react-router-dom';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const SECTIONS = [
@@ -80,41 +84,44 @@ export default function Docs() {
   const faq = FAQ.filter(([a, b]) => !q || (a + b).toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Panduan</Typography>
-      <TextField placeholder="Cari panduan…" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 3, maxWidth: 420 }} />
-      <Grid container spacing={3}>
-        {desktop && (
-          <Grid item md={3}>
-            <Box sx={{ position: 'sticky', top: 80 }}>
-              <List dense>
-                {[...SECTIONS, { id: 'faq', title: 'FAQ' }].map((s) => (
-                  <ListItemButton key={s.id} href={`#${s.id}`}><ListItemText primary={s.title} /></ListItemButton>
-                ))}
-              </List>
+    <>
+      <PageHeader eyebrow="Panduan" title="Dari konfigurasi sampai Play Store." subtitle="Langkah singkat untuk setiap bagian Apkify, plus jawaban pertanyaan yang paling sering muncul." />
+      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '220px minmax(0,1fr)' }, gap: { xs: 3, md: 6 } }}>
+          <Box component="nav" aria-label="Isi panduan">
+            <Box sx={{ position: { md: 'sticky' }, top: 88 }}>
+              <TextField placeholder="Cari panduan…" value={q} onChange={(e) => setQ(e.target.value)} inputProps={{ 'aria-label': 'Cari panduan' }} sx={{ mb: 2 }} />
+              {desktop && [...SECTIONS, { id: 'faq', title: 'FAQ' }].map((s) => (
+                <Box key={s.id} component="a" href={`#${s.id}`} sx={{ display: 'block', py: 0.625, fontSize: 13, lineHeight: 1.4, color: 'text.secondary', textDecoration: 'none', '&:hover': { color: 'text.primary' } }}>{s.title}</Box>
+              ))}
+              <Box component={RouterLink} to="/docs/api" sx={{ display: desktop ? 'block' : 'none', mt: 2, pt: 2, borderTop: 1, borderColor: 'divider', fontSize: 13, color: 'primary.main', textDecoration: 'none' }}>Referensi API →</Box>
             </Box>
-          </Grid>
-        )}
-        <Grid item xs={12} md={9}>
-          {filtered.map((s) => (
-            <Card key={s.id} id={s.id} sx={{ mb: 2, scrollMarginTop: 80 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>{s.title}</Typography>
-                <Box component="ol" sx={{ pl: 2.5, m: 0, '& li': { mb: 1 } }}>
-                  {s.body.map((b) => <li key={b}><Typography>{b}</Typography></li>)}
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            {filtered.length === 0 && faq.length === 0 && <EmptyState title="Tidak ada hasil">Coba kata lain, mis. “keystore” atau “ZIP”.</EmptyState>}
+            {filtered.map((s, si) => (
+              <Box key={s.id} id={s.id} component="section" sx={{ scrollMarginTop: 80, pb: 5, mb: 5, borderBottom: 1, borderColor: 'divider' }}>
+                <Typography sx={{ fontFamily: MONO, fontSize: 12, color: 'primary.main', mb: 0.75 }}>{String(si + 1).padStart(2, '0')}</Typography>
+                <Typography variant="h4" component="h2" sx={{ mb: 2.5 }}>{s.title}</Typography>
+                <Box component="ol" sx={{ listStyle: 'none', p: 0, m: 0, counterReset: 'li' }}>
+                  {s.body.map((b) => (
+                    <Box component="li" key={b} sx={{ position: 'relative', pl: 4, py: 0.75, counterIncrement: 'li', '&::before': { content: 'counter(li)', position: 'absolute', left: 0, top: 9, fontFamily: MONO, fontSize: 11.5, color: 'text.disabled' } }}>
+                      <Typography sx={{ maxWidth: 680 }}>{b}</Typography>
+                    </Box>
+                  ))}
                 </Box>
-              </CardContent>
-            </Card>
-          ))}
-          <Typography id="faq" variant="h5" sx={{ mt: 4, mb: 1, scrollMarginTop: 80 }}>FAQ</Typography>
-          {faq.map(([qq, a]) => (
-            <Accordion key={qq} disableGutters>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography fontWeight={600}>{qq}</Typography></AccordionSummary>
-              <AccordionDetails><Typography color="text.secondary">{a}</Typography></AccordionDetails>
-            </Accordion>
-          ))}
-        </Grid>
-      </Grid>
-    </Container>
+              </Box>
+            ))}
+            {faq.length > 0 && <Typography id="faq" variant="h4" component="h2" sx={{ mb: 2, scrollMarginTop: 80 }}>Pertanyaan umum</Typography>}
+            {faq.map(([qq, a]) => (
+              <Accordion key={qq} sx={{ borderTop: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 1, borderColor: 'divider' } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 20 }} />} sx={{ px: 0, minHeight: 56 }}><Typography sx={{ fontWeight: 600 }}>{qq}</Typography></AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0 }}><Typography color="text.secondary" sx={{ maxWidth: 680 }}>{a}</Typography></AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
+        </Box>
+      </Container>
+    </>
   );
 }

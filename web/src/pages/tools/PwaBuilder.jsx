@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Container, Typography, Card, CardContent, Stack, TextField, Button, Grid, MenuItem, Alert, Chip, Box } from '@mui/material';
+import { Container, Typography, Card, CardContent, Stack, TextField, Button, Grid, MenuItem, Alert } from '@mui/material';
+import { ToolHeader, CodeBlock } from '../../components/ui';
 import JSZip from 'jszip';
 import FileDrop from '../../components/FileDrop';
 import ColorField from '../../components/ColorField';
@@ -69,9 +70,8 @@ export default function PwaBuilder() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" spacing={1} alignItems="center"><Typography variant="h4">PWA Builder</Typography><Chip size="small" label="eksperimental" color="warning" /></Stack>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Jadikan situs Anda Progressive Web App: bisa dipasang di layar utama, berjalan offline, dan siap dikonversi ke APK. Hasil: manifest, service worker, ikon, dan halaman offline.</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="PWA Builder" badge="eksperimental">Jadikan situs Anda Progressive Web App: bisa dipasang di layar utama, berjalan offline, dan siap dikonversi ke APK. Hasil: manifest, service worker, ikon, dan halaman offline.</ToolHeader>
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Card><CardContent><Stack spacing={2}>
@@ -106,9 +106,9 @@ export default function PwaBuilder() {
         </Grid>
         <Grid item xs={12} md={6}>
           <Typography fontWeight={700} gutterBottom>Tempel di &lt;head&gt;</Typography>
-          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 2, fontSize: 12, overflow: 'auto' }}>{snippet}</Box>
+          <CodeBlock>{snippet}</CodeBlock>
           <Typography fontWeight={700} gutterBottom sx={{ mt: 2 }}>manifest.webmanifest</Typography>
-          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 2, fontSize: 12, overflow: 'auto', maxHeight: 320 }}>{JSON.stringify(manifest, null, 2)}</Box>
+          <CodeBlock>{JSON.stringify(manifest, null, 2)}</CodeBlock>
           <Alert severity="info" sx={{ mt: 2 }}>Setelah situs menjadi PWA, buat APK lewat “Buat Aplikasi” → Website, atau publikasikan sebagai TWA.</Alert>
         </Grid>
       </Grid>

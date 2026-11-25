@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, TextField, Button, Grid, Slider, LinearProgress, Alert, Box } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import FileDrop from '../../components/FileDrop';
 import ColorField from '../../components/ColorField';
@@ -118,9 +119,8 @@ export default function PromoVideo() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Promo Video & GIF</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Slideshow screenshot dalam bingkai HP untuk media sosial, WhatsApp Status, atau Reels. Untuk Play Store, unggah video ke YouTube lalu tempel link-nya di Play Console.</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Promo Video & GIF">Slideshow screenshot dalam bingkai HP untuk media sosial, WhatsApp Status, atau Reels. Untuk Play Store, unggah video ke YouTube lalu tempel link-nya di Play Console.</ToolHeader>
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
           <Card><CardContent><canvas ref={cv} width={W} height={H} style={{ width: '100%', height: 'auto', borderRadius: 8 }} /></CardContent></Card>

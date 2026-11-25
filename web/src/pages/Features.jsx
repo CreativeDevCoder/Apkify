@@ -1,5 +1,6 @@
 import { Link as RouterLink } from 'react-router-dom';
-import { Container, Typography, Grid, Card, CardContent, Button, Box } from '@mui/material';
+import { Container, Typography, Button, Box } from '@mui/material';
+import { Eyebrow, RuleList } from '../components/ui';
 import PageHeader from '../components/PageHeader';
 
 const GROUPS = [
@@ -74,24 +75,20 @@ const GROUPS = [
 export default function Features() {
   return (
     <>
-      <PageHeader title="Fitur lengkap" subtitle="Semua yang dibutuhkan untuk mengubah website menjadi aplikasi Android berkualitas — gratis." />
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        {GROUPS.map(([g, items]) => (
-          <Box key={g} sx={{ mb: 5 }}>
-            <Typography variant="h5" gutterBottom>{g}</Typography>
-            <Grid container spacing={2}>
-              {items.map(([t, d]) => (
-                <Grid item xs={12} sm={6} md={4} key={t}>
-                  <Card sx={{ height: '100%' }}><CardContent>
-                    <Typography fontWeight={700}>{t}</Typography>
-                    <Typography variant="body2" color="text.secondary">{d}</Typography>
-                  </CardContent></Card>
-                </Grid>
-              ))}
-            </Grid>
+      <PageHeader eyebrow="Fitur" title="Semua yang dibutuhkan aplikasi Anda." subtitle="Dari konten dan tampilan sampai fitur HP, iklan, dan publikasi — tanpa biaya dan tanpa watermark." />
+      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
+        {GROUPS.map(([g, items], gi) => (
+          <Box key={g} component="section" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '240px 1fr' }, gap: { xs: 2, md: 6 }, py: { xs: 4, md: 6 }, borderTop: gi ? 1 : 0, borderColor: 'divider' }}>
+            <Box>
+              <Box sx={{ position: { md: 'sticky' }, top: 88 }}>
+                <Eyebrow index={gi + 1} sx={{ mb: 1 }}>{`${items.length} fitur`}</Eyebrow>
+                <Typography variant="h4" component="h2">{g}</Typography>
+              </Box>
+            </Box>
+            <RuleList items={items} cols={{ xs: 1, sm: 2, md: 2 }} />
           </Box>
         ))}
-        <Button size="large" variant="contained" component={RouterLink} to="/create">Mulai gratis</Button>
+        <Button size="large" variant="contained" component={RouterLink} to="/create" sx={{ mt: 4 }}>Mulai gratis</Button>
       </Container>
     </>
   );

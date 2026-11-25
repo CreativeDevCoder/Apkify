@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { Container, Typography, Grid, Card, CardContent, Button, Stack, Box, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { Container, Typography, Button, Stack, Box, Accordion, AccordionSummary, AccordionDetails, Link } from '@mui/material';
+import { RuleList } from '../components/ui';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PageHeader from '../components/PageHeader';
 
@@ -54,8 +55,8 @@ export const LANDINGS = {
     title: 'AI Website to App', h1: 'Ubah situs buatan AI menjadi aplikasi Android',
     lead: 'Proyek dari Lovable, Bolt, v0, Replit, Google AI Studio, atau AI Studio kami sendiri bisa langsung dijadikan APK.',
     cta: ['/ai-studio', 'Coba AI Studio'],
-    points: [['Dari URL deploy', 'Cara tercepat: salin URL hasil deploy lalu pilih tab Website.'], ['Dari ZIP build', 'Set base relatif, gunakan hash router, build, lalu zip folder dist.'], ['Tanpa situs?', 'Gunakan AI Studio: tulis deskripsi, AI membuat aplikasinya, lalu build APK.']],
-    faq: [['Login Google di aplikasi gagal?', 'Google memblokir OAuth di WebView. Gunakan login email atau Supabase Auth.'], ['Supabase didukung?', 'Ya, aktifkan “Backend Supabase” — URL & anon key tersedia di window.APKIFY.']]
+    points: [['Dari URL deploy', 'Cara tercepat: salin URL hasil deploy lalu pilih tab Website.'], ['Dari kode sumber', 'Unduh ZIP proyek (tanpa node_modules) dan unggah — kami jalankan npm install + build. BrowserRouter tetap berjalan.'], ['Tanpa situs?', 'Gunakan AI Studio: tulis deskripsi, AI membuat aplikasinya, lalu build APK.']],
+    faq: [['Login Google di aplikasi gagal?', 'Google memblokir login di WebView. Aktifkan “Login Google native” lalu pakai Apkify.google.signIn() — ID token-nya bisa dipakai di Firebase atau Supabase.'], ['Supabase didukung?', 'Ya, aktifkan “Backend Supabase” — URL & anon key tersedia di window.APKIFY.']]
   }
 };
 
@@ -66,29 +67,32 @@ export default function Landing() {
   if (!d) return null;
   return (
     <>
-      <PageHeader title={d.h1} subtitle={d.lead}>
-        <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+      <PageHeader eyebrow={d.title} title={d.h1} subtitle={d.lead}>
+        <Stack direction="row" spacing={1.5}>
           <Button size="large" variant="contained" component={RouterLink} to={d.cta[0]}>{d.cta[1]}</Button>
-          <Button size="large" component={RouterLink} to="/guides">Panduan per platform</Button>
+          <Button size="large" variant="outlined" component={RouterLink} to="/guides">Panduan per platform</Button>
         </Stack>
       </PageHeader>
-      <Container maxWidth="lg" sx={{ py: 6 }}>
-        <Grid container spacing={2}>
-          {d.points.map(([t, x]) => (
-            <Grid item xs={12} md={4} key={t}><Card sx={{ height: '100%' }}><CardContent>
-              <Typography variant="h6">{t}</Typography><Typography color="text.secondary">{x}</Typography>
-            </CardContent></Card></Grid>
-          ))}
-        </Grid>
-        <Typography variant="h5" sx={{ mt: 6, mb: 1 }}>Pertanyaan umum</Typography>
-        {d.faq.map(([q, a]) => (
-          <Accordion key={q} disableGutters><AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography fontWeight={600}>{q}</Typography></AccordionSummary>
-            <AccordionDetails><Typography color="text.secondary">{a}</Typography></AccordionDetails></Accordion>
-        ))}
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="body2" color="text.secondary">Halaman terkait: {Object.keys(LANDINGS).filter((p) => p !== pathname).map((p, i) => (
-            <span key={p}>{i > 0 && ' • '}<RouterLink to={p}>{LANDINGS[p].title}</RouterLink></span>
-          ))}</Typography>
+      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 8 } }}>
+        <RuleList items={d.points} cols={{ xs: 1, md: 3 }} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '240px 1fr' }, gap: { xs: 2, md: 6 }, mt: { xs: 6, md: 9 } }}>
+          <Typography variant="h4" component="h2">Pertanyaan umum</Typography>
+          <Box>
+            {d.faq.map(([q, a]) => (
+              <Accordion key={q} sx={{ borderTop: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 1, borderColor: 'divider' } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ fontSize: 20 }} />} sx={{ px: 0, minHeight: 56 }}><Typography sx={{ fontWeight: 600 }}>{q}</Typography></AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0 }}><Typography color="text.secondary">{a}</Typography></AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
+        </Box>
+        <Box sx={{ mt: 6, ml: { md: '288px' } }}>
+          <Typography variant="overline" color="text.secondary" component="div" sx={{ mb: 1 }}>Halaman terkait</Typography>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', columnGap: 2.5, rowGap: 1 }}>
+            {Object.keys(LANDINGS).filter((p) => p !== pathname).map((p) => (
+              <Link key={p} component={RouterLink} to={p} variant="body2">{LANDINGS[p].title}</Link>
+            ))}
+          </Stack>
         </Box>
       </Container>
     </>

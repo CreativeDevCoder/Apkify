@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Container, Typography, Card, CardContent, Stack, TextField, Button, Grid } from '@mui/material';
+import { Container, Card, CardContent, Stack, TextField, Button, Grid } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import FileDrop from '../../components/FileDrop';
 import ColorField from '../../components/ColorField';
 import { loadImage, fileToDataUrl } from '../../lib/iconGen';
@@ -48,8 +49,8 @@ export default function FeatureGraphic() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Feature Graphic Maker</Typography>
+    <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Feature Graphic Maker" />
       <Card sx={{ mb: 2 }}><CardContent>
         <canvas ref={cv} width={W} height={H} style={{ width: '100%', height: 'auto', borderRadius: 8 }} />
       </CardContent></Card>

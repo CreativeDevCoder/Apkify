@@ -3,13 +3,13 @@ import { previewDoc } from '../../lib/preview';
 import { NAV_ICON_EL } from './icons';
 
 /** Pratinjau langsung tampilan aplikasi (toolbar, navigasi bawah, tombol mengambang) di bingkai HP. */
-export default function LivePreview({ cfg, html, iconPreview, frameBlocked }) {
+export default function LivePreview({ cfg, html, iconPreview, frameBlocked, width = 300 }) {
   const f = cfg.features;
   const url = cfg.source.type === 'url' ? cfg.source.url.trim() : '';
   const src = url && /^https?:\/\//i.test(url) ? url : '';
   return (
     <Box>
-      <Box sx={{ mx: 'auto', width: 300, height: 600, border: '10px solid #111', borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: '#fff', position: 'relative' }}>
+      <Box sx={{ mx: 'auto', width, height: width * 2, border: '7px solid', borderColor: (t) => (t.palette.mode === 'light' ? '#16181c' : '#2a2e35'), borderRadius: '30px', overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: '#fff', position: 'relative', boxShadow: (t) => (t.palette.mode === 'light' ? '0 24px 48px -28px rgba(15,18,23,.35)' : 'none') }}>
         <Box sx={{ height: 22, bgcolor: cfg.colors.statusBar, flex: 'none' }} />
         {(f.showToolbar || f.sideMenu) && (
           <Stack direction="row" alignItems="center" spacing={1} sx={{ height: 44, px: 1.5, bgcolor: cfg.colors.primary, color: '#fff', flex: 'none' }}>

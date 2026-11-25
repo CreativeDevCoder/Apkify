@@ -1,33 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 import {
-  Container, Typography, Card, CardContent, Stack, Button, Alert, LinearProgress, Stepper, Step,
-  StepLabel, Box, Grid, Skeleton, Link
+  Container, Typography, Stack, Button, Alert, Box, Skeleton, Link
 } from '@mui/material';
-import AndroidIcon from '@mui/icons-material/Android';
-import StoreIcon from '@mui/icons-material/Store';
-import EditIcon from '@mui/icons-material/Edit';
 import QRCode from 'qrcode';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../firebase';
 import { fileUrl } from '../lib/api';
 import StatusChip, { FINAL } from '../components/StatusChip';
 import { PLATFORM_INFO } from '../components/create/PlatformPicker';
-import { Chip, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
-import DownloadIcon from '@mui/icons-material/Download';
+import { Divider } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/FileDownloadOutlined';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import { Dot, EmptyState } from '../components/ui';
+import { MONO } from '../theme';
+import { PREVIEW, previewBuild } from '../lib/previewFixtures';
 
 // Artefak per platform (urutan tampil)
 const ART = {
-  android: [['apk', 'APK — pasang langsung'], ['aab', 'AAB — upload ke Google Play']],
+  android: [['apk', 'Pasang langsung di HP'], ['aab', 'Upload ke Google Play']],
   windows: [['exe', 'Installer .exe (NSIS)'], ['msi', 'Installer .msi']],
   macos: [['dmg', 'Disk image .dmg (Universal)']],
   linux: [['appimage', 'AppImage (semua distro)'], ['deb', 'Paket .deb (Ubuntu/Debian)']],
   ios: [['ipa', 'IPA'], ['xcode', 'Proyek Xcode (.zip)']]
 };
-const JOB_LABEL = { queued: 'antre', building: 'dibuild', success: 'selesai', failed: 'gagal' };
+const JOB_LABEL = { queued: 'antre', building: 'berjalan', success: 'selesai', failed: 'gagal' };
 
 const STEPS = ['queued', 'building', 'uploading', 'success'];
-const LABEL = { queued: 'Antre', building: 'Build di cloud', uploading: 'Simpan hasil', success: 'Selesai' };
+const LABEL = { queued: 'Antre', building: 'Build di cloud', uploading: 'Menyimpan hasil', success: 'Selesai' };
 
 export default function BuildDetail() {
   const { buildId } = useParams();
@@ -37,6 +38,7 @@ export default function BuildDetail() {
 
   // Listener realtime HANYA selama build belum selesai -> hemat koneksi & bandwidth RTDB
   useEffect(() => {
+    if (PREVIEW) { setB(previewBuild(buildId)); return undefined; }
     const r = ref(db, `builds/${buildId}`);
     let done = false;
     let unsub = null;
@@ -61,109 +63,119 @@ export default function BuildDetail() {
   useEffect(() => {
     if (b?.apkFileId) {
       const url = new URL(fileUrl(b.apkFileId, `${b.packageName}.apk`), window.location.origin).href;
-      QRCode.toDataURL(url, { margin: 1, width: 220 }).then(setQr);
+      QRCode.toDataURL(url, { margin: 1, width: 336, color: { dark: '#0f1217', light: '#ffffff' } }).then(setQr);
     }
   }, [b?.apkFileId, b?.packageName]);
 
-  if (b === undefined) return <Container sx={{ py: 4 }}><Skeleton variant="rounded" height={300} /></Container>;
-  if (b === null) return <Container sx={{ py: 4 }}><Alert severity="error">Build tidak ditemukan atau Anda tidak punya akses.</Alert></Container>;
+  if (b === undefined) return <Container maxWidth="lg" sx={{ py: 6 }}><Skeleton width={220} height={40} /><Skeleton width={320} /><Skeleton variant="rounded" height={240} sx={{ mt: 4 }} /></Container>;
+  if (b === null) return (
+    <Container maxWidth="sm" sx={{ py: 10 }}>
+      <EmptyState title="Build tidak ditemukan" action={<Button variant="outlined" component={RouterLink} to="/dashboard">Kembali ke Studio</Button>}>
+        Tautan mungkin salah, atau build ini milik akun lain.
+      </EmptyState>
+    </Container>
+  );
 
   const jobs = b.jobs || { android: b.status === 'success' ? 'success' : b.status === 'failed' ? 'failed' : 'building' };
   const art = (t) => b.artifacts?.[t] || (b[`${t}FileId`] ? { fileId: b[`${t}FileId`], size: b[`${t}Size`] } : null);
-  const active = b.status === 'failed' ? STEPS.indexOf(b.failedAt || 'building') : STEPS.indexOf(b.status);
+  const active = b.status === 'failed' ? STEPS.indexOf(b.failedAt || 'building') : b.status === 'partial' ? STEPS.length : STEPS.indexOf(b.status);
+  const running = !FINAL.includes(b.status);
+  const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  const dur = b.finishedAt && b.createdAt ? Math.round((b.finishedAt - b.createdAt) / 1000) : null;
+  const size = (n) => (n ? `${(n / 1048576).toFixed(1)} MB` : '');
+  const ok = b.status === 'success' || b.status === 'partial';
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h4">{b.name}</Typography>
-          <Typography color="text.secondary">{b.packageName} • v{b.versionName} ({b.versionCode})</Typography>
-        </Box>
-        <StatusChip status={b.status} size="medium" />
-      </Stack>
-
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Stepper activeStep={b.status === 'success' ? STEPS.length : active} alternativeLabel>
-            {STEPS.map((s, i) => (
-              <Step key={s}><StepLabel error={b.status === 'failed' && i === active}>{LABEL[s]}</StepLabel></Step>
-            ))}
-          </Stepper>
-          {Object.keys(jobs).length > 1 && (
-            <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap', gap: 1 }}>
-              {Object.entries(jobs).map(([j, st]) => (
-                <Chip key={j} icon={PLATFORM_INFO[j]?.icon} label={`${PLATFORM_INFO[j]?.label || j}: ${JOB_LABEL[st] || st}`}
-                  color={st === 'success' ? 'success' : st === 'failed' ? 'error' : 'default'} variant={st === 'success' ? 'filled' : 'outlined'} />
-              ))}
-            </Stack>
-          )}
-          {!FINAL.includes(b.status) && (
-            <Box sx={{ mt: 3 }}>
-              <LinearProgress />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Waktu berjalan {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')} — biasanya 3–6 menit. Halaman ini otomatis ter-update; Anda juga akan menerima email saat selesai.
+    <Box>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Container maxWidth="lg" sx={{ py: { xs: 3.5, md: 4.5 } }}>
+          <Typography component={RouterLink} to="/dashboard" variant="body2" sx={{ color: 'text.secondary', textDecoration: 'none', '&:hover': { color: 'text.primary' } }}>← Studio</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'flex-end' }} spacing={2} sx={{ mt: 2 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h3" component="h1" noWrap>{b.name}</Typography>
+              <Typography sx={{ fontFamily: MONO, fontSize: 12.5, color: 'text.secondary', mt: 0.75 }} noWrap className="tnum">
+                {b.packageName} · v{b.versionName} ({b.versionCode}) · build {String(buildId).slice(-6)}
               </Typography>
             </Box>
-          )}
-        </CardContent>
-      </Card>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <StatusChip status={b.status} />
+              <Button variant="outlined" component={RouterLink} to={`/create/${b.appId}`}>{ok || b.status === 'failed' ? 'Ubah & build lagi' : 'Lihat konfigurasi'}</Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-      {(b.status === 'failed' || b.status === 'partial') && (
-        <Alert severity={b.status === "partial" ? "warning" : "error"} sx={{ mb: 2 }} action={<Button color="inherit" component={RouterLink} to={`/create/${b.appId}`}>Coba lagi</Button>}>
-          {b.error || 'Build gagal.'} {b.logUrl && <Link href={b.logUrl} target="_blank" rel="noopener">Lihat log</Link>}
-        </Alert>
-      )}
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 5 } }}>
+        {/* Tahapan */}
+        <Box role="list" aria-label="Tahapan build" sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: { xs: 1, sm: 2 } }}>
+          {STEPS.map((st, i) => {
+            const done = b.status === 'success' || b.status === 'partial' || i < active;
+            const now = i === active && running;
+            const bad = b.status === 'failed' && i === active;
+            return (
+              <Box role="listitem" key={st}>
+                <Box sx={{ height: 3, borderRadius: 2, bgcolor: bad ? 'error.main' : done ? 'text.primary' : now ? 'primary.main' : 'divider', ...(now && { animation: 'apkPulse 1.6s ease-in-out infinite', '@keyframes apkPulse': { '50%': { opacity: 0.4 } } }) }} />
+                <Typography sx={{ fontFamily: MONO, fontSize: 11, mt: 1, color: bad ? 'error.main' : done || now ? 'text.primary' : 'text.disabled' }}>{String(i + 1).padStart(2, '0')}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: done || now ? 500 : 400, color: done || now || bad ? 'text.primary' : 'text.secondary' }}>{LABEL[st]}</Typography>
+              </Box>
+            );
+          })}
+        </Box>
+        <Typography variant="body2" color="text.secondary" className="tnum" sx={{ mt: 2.5 }}>
+          {running ? <>Berjalan <Box component="span" sx={{ fontFamily: MONO, color: 'text.primary' }}>{mmss(elapsed)}</Box> — biasanya 3–6 menit. Halaman ini memperbarui sendiri, dan email dikirim saat selesai.</>
+            : dur ? <>Selesai dalam <Box component="span" sx={{ fontFamily: MONO, color: 'text.primary' }}>{mmss(dur)}</Box> · {new Date(b.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</>
+            : new Date(b.createdAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+        </Typography>
 
-      {(b.status === 'success' || b.status === 'partial') && Object.keys(jobs).some((j) => j !== 'android') && (
-        <Card sx={{ mb: 2 }}><CardContent>
-          <Typography variant="h6" gutterBottom>Unduhan per platform</Typography>
-          {Object.entries(jobs).map(([j, st]) => (
-            <Box key={j} sx={{ mb: 1 }}>
-              <Stack direction="row" alignItems="center" spacing={1}>{PLATFORM_INFO[j]?.icon}<Typography fontWeight={700}>{PLATFORM_INFO[j]?.label || j}</Typography>
-                {st !== 'success' && <Chip size="small" color="error" label={b.jobErrors?.[j] || 'gagal'} />}</Stack>
-              <List dense>
-                {(ART[j] || []).map(([t, label]) => art(t) && (
-                  <ListItem key={t} secondaryAction={<Button size="small" startIcon={<DownloadIcon />} href={fileUrl(art(t).fileId, art(t).name || `${b.packageName}.${t}`)}>Unduh</Button>}>
-                    <ListItemIcon sx={{ minWidth: 34 }}><DownloadIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText primary={label} secondary={art(t).size ? `${(art(t).size / 1048576).toFixed(1)} MB` : ''} />
-                  </ListItem>
-                ))}
-              </List>
-              {j === 'ios' && st === 'success' && <Typography variant="caption" color="text.secondary">IPA tanpa sertifikat harus ditandatangani ulang (Sideloadly/AltStore/Xcode). Unggah sertifikat di Studio untuk IPA siap App Store.</Typography>}
-              {(j === 'windows' || j === 'macos') && st === 'success' && <Typography variant="caption" color="text.secondary" display="block">Belum bertanda tangan kode: pilih “More info → Run anyway” (Windows) atau klik kanan → Open (macOS).</Typography>}
-              <Divider sx={{ mt: 1 }} />
+        {(b.status === 'failed' || b.status === 'partial') && (
+          <Alert severity={b.status === 'partial' ? 'warning' : 'error'} sx={{ mt: 3 }}
+            action={b.logUrl && <Button color="inherit" size="small" href={b.logUrl} target="_blank" rel="noopener">Lihat log</Button>}>
+            {b.error || (b.status === 'partial' ? 'Sebagian platform gagal dibuild.' : 'Build gagal.')}
+          </Alert>
+        )}
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: ok && art('apk') ? 'minmax(0,1fr) 260px' : '1fr' }, gap: { xs: 4, md: 6 }, mt: { xs: 4, md: 5 }, alignItems: 'start' }}>
+          {/* Job per platform + artefak */}
+          <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 2, bgcolor: 'background.paper' }}>
+            {Object.entries(jobs).map(([j, st], idx) => {
+              const files = (ART[j] || []).filter(([t]) => art(t));
+              return (
+                <Box key={j} sx={{ borderTop: idx ? 1 : 0, borderColor: 'divider' }}>
+                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ px: 2, py: 1.5, bgcolor: (t) => t.tokens.subtle, borderRadius: idx ? 0 : '8px 8px 0 0', borderBottom: files.length ? 1 : 0, borderColor: 'divider' }}>
+                    <Box sx={{ width: 16, display: 'grid', placeItems: 'center' }}>
+                      {st === 'success' ? <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} /> : st === 'failed' ? <CloseIcon sx={{ fontSize: 16, color: 'error.main' }} /> : <Dot color={st === 'queued' ? 'text.disabled' : 'primary.main'} pulse={st !== 'queued'} />}
+                    </Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>{PLATFORM_INFO[j]?.label || j}</Typography>
+                    <Typography sx={{ fontFamily: MONO, fontSize: 11.5, color: st === 'failed' ? 'error.main' : 'text.secondary' }}>
+                      {st === 'failed' ? (b.jobErrors?.[j] || 'gagal') : JOB_LABEL[st] || st}
+                    </Typography>
+                  </Stack>
+                  {files.map(([t, label]) => (
+                    <Stack key={t} direction="row" alignItems="center" spacing={2} sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
+                      <Typography sx={{ fontFamily: MONO, fontSize: 12, width: 72, color: 'primary.main' }}>.{t === 'xcode' ? 'zip' : t}</Typography>
+                      <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{label}</Typography>
+                      <Typography className="tnum" sx={{ fontFamily: MONO, fontSize: 12, color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>{size(art(t).size)}</Typography>
+                      <Button size="small" variant={t === 'apk' || t === 'exe' || t === 'dmg' || t === 'appimage' || t === 'ipa' ? 'contained' : 'outlined'} startIcon={<DownloadIcon />}
+                        href={fileUrl(art(t).fileId, art(t).name || `${b.packageName}-${b.versionName}.${t === 'xcode' ? 'zip' : t}`)}>Unduh</Button>
+                    </Stack>
+                  ))}
+                  {st === 'success' && j === 'ios' && <Typography variant="caption" component="div" sx={{ px: 2, py: 1.25 }}>IPA tanpa sertifikat perlu ditandatangani ulang (Sideloadly/AltStore/Xcode). Unggah sertifikat di Studio untuk IPA siap App Store.</Typography>}
+                  {st === 'success' && (j === 'windows' || j === 'macos') && <Typography variant="caption" component="div" sx={{ px: 2, py: 1.25 }}>Belum bertanda tangan kode: Windows → “More info → Run anyway”; macOS → klik kanan → Open.</Typography>}
+                  {st === 'success' && j === 'android' && <Typography variant="caption" component="div" sx={{ px: 2, py: 1.25 }}>APK untuk dipasang langsung; AAB untuk Google Play — lihat <Link component={RouterLink} to="/docs#publish">panduan publikasi</Link>.</Typography>}
+                </Box>
+              );
+            })}
+          </Box>
+
+          {ok && art('apk') && (
+            <Box sx={{ textAlign: 'center', border: 1, borderColor: 'divider', borderRadius: 2, p: 2.5, bgcolor: 'background.paper' }}>
+              <Typography variant="overline" color="text.secondary" component="div" sx={{ mb: 1.5 }}>Pasang di HP</Typography>
+              {qr ? <Box component="img" src={qr} alt="Kode QR untuk mengunduh APK" sx={{ width: 168, height: 168, display: 'block', mx: 'auto', borderRadius: 1, bgcolor: '#fff', p: 0.5 }} /> : <Skeleton variant="rounded" width={168} height={168} sx={{ mx: 'auto' }} />}
+              <Typography variant="caption" component="div" sx={{ mt: 1.5 }}>Pindai untuk mengunduh APK, lalu izinkan pemasangan dari sumber ini.</Typography>
             </Box>
-          ))}
-        </CardContent></Card>
-      )}
-
-      {(b.status === 'success' || (b.status === 'partial' && jobs.android === 'success')) && art('apk') && (
-        <Card>
-          <CardContent>
-            <Grid container spacing={3} alignItems="center">
-              <Grid item xs={12} sm={7}>
-                <Typography variant="h6" gutterBottom>Aplikasi siap 🎉</Typography>
-                <Stack spacing={1.5}>
-                  <Button variant="contained" size="large" startIcon={<AndroidIcon />} href={fileUrl(b.apkFileId, `${b.packageName}-${b.versionName}.apk`)}>
-                    Unduh APK {b.apkSize ? `(${(b.apkSize / 1048576).toFixed(1)} MB)` : ''}
-                  </Button>
-                  <Button variant="outlined" size="large" startIcon={<StoreIcon />} href={fileUrl(b.aabFileId, `${b.packageName}-${b.versionName}.aab`)}>
-                    Unduh AAB untuk Google Play
-                  </Button>
-                  <Button startIcon={<EditIcon />} component={RouterLink} to={`/create/${b.appId}`}>Ubah & build versi baru</Button>
-                </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  Pasang APK di HP (izinkan “sumber tidak dikenal”). Untuk Play Store, upload file AAB — lihat <Link component={RouterLink} to="/docs#publish">panduan publikasi</Link>.
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={5} sx={{ textAlign: 'center' }}>
-                {qr && <img src={qr} alt="QR unduh APK" width={200} height={200} style={{ borderRadius: 8 }} />}
-                <Typography variant="caption" display="block" color="text.secondary">Pindai dengan HP untuk mengunduh APK</Typography>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
-    </Container>
+          )}
+        </Box>
+      </Container>
+    </Box>
   );
 }

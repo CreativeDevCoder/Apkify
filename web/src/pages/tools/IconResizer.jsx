@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, Button, Box, Slider, FormControlLabel, Switch, Alert } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import JSZip from 'jszip';
 import FileDrop from '../../components/FileDrop';
 import ColorField from '../../components/ColorField';
@@ -40,8 +41,8 @@ export default function IconResizer() {
   }
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Icon Resizer</Typography>
+    <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Icon Resizer" />
       <Card><CardContent>
         <Stack spacing={2}>
           <FileDrop accept="image/*" onFile={onFile} hint="PNG/JPG/WebP, ideal 1024×1024" />

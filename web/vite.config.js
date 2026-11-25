@@ -18,7 +18,7 @@ export default defineConfig({
         name: 'Apkify — Website ke APK Gratis',
         short_name: 'Apkify',
         description: 'Ubah website, ZIP, atau HTML menjadi aplikasi Android (APK & AAB) gratis.',
-        theme_color: '#4f46e5',
+        theme_color: '#0073e6',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',

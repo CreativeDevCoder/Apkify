@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Container, Typography, TextField, Card, CardContent, Chip, Stack, Box, Alert, Grid } from '@mui/material';
+import { Container, Typography, TextField, Stack, Box, Alert } from '@mui/material';
+import { CodeBlock, EmptyState } from '../components/ui';
+import { MONO } from '../theme';
+
+const slug = (ns) => ns.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 import PageHeader from '../components/PageHeader';
 
 // [namespace, fitur Apkify, ringkasan, metode, contoh]
@@ -140,30 +144,41 @@ export default function DocsApi() {
   }, [q]);
   return (
     <>
-      <PageHeader title="Referensi JavaScript API" subtitle="Panggil fitur native Android dari kode situs/React Anda lewat window.Apkify" />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Semua fungsi asinkron mengembalikan Promise berisi <code>{'{ ok: true, … }'}</code> atau <code>{'{ ok: false, error }'}</code> — tidak pernah melempar error.
-          Pakai <code>Apkify.call.strict('nfc.read')</code> bila ingin <i>reject</i> saat gagal. Event: <code>Apkify.on('nama', fn)</code> atau
-          <code> document.addEventListener('apkify:nama', e =&gt; e.detail)</code>. Selalu cek <code>if (window.Apkify)</code> agar situs tetap berjalan di browser biasa.
-          Aktifkan fitur yang dipakai di halaman Buat Aplikasi → “Fitur native lengkap”, lalu build ulang.
-        </Alert>
-        <TextField fullWidth placeholder="Cari: nfc, printer, ocr, absensi, notifikasi…" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 3 }} />
-        <Grid container spacing={2}>
-          {list.map(([ns, feat, desc, methods, code]) => (
-            <Grid item xs={12} md={6} key={ns}>
-              <Card variant="outlined" sx={{ height: '100%' }}><CardContent>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5, flexWrap: 'wrap' }}>
-                  <Typography variant="h6" fontFamily="monospace">{ns}</Typography>
-                  <Chip size="small" label={`fitur: ${feat}`} />
+      <PageHeader eyebrow="Referensi API" title="window.Apkify" subtitle="Panggil fitur native Android dari kode situs atau React Anda. Aktifkan fiturnya di Studio, lalu build ulang." />
+      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 7 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '220px minmax(0,1fr)' }, gap: { xs: 4, md: 6 } }}>
+          <Box component="nav" aria-label="Daftar namespace" sx={{ display: { xs: 'none', md: 'block' } }}>
+            <Box sx={{ position: 'sticky', top: 88 }}>
+              <TextField placeholder="Cari API…" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 2 }} inputProps={{ 'aria-label': 'Cari API' }} />
+              {list.map(([ns]) => (
+                <Box key={ns} component="a" href={`#${slug(ns)}`} sx={{ display: 'block', py: 0.5, fontFamily: MONO, fontSize: 12.5, color: 'text.secondary', textDecoration: 'none', '&:hover': { color: 'text.primary' } }}>{ns}</Box>
+              ))}
+            </Box>
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Alert severity="info" sx={{ mb: 4 }}>
+              Semua fungsi asinkron mengembalikan Promise <code>{'{ ok: true, … }'}</code> atau <code>{'{ ok: false, error }'}</code> — tidak pernah melempar error; pakai <code>Apkify.call.strict()</code> bila ingin <i>reject</i>.
+              Event: <code>Apkify.on('nama', fn)</code>. Selalu cek <code>if (window.Apkify)</code> agar situs tetap berjalan di browser biasa.
+            </Alert>
+            <TextField placeholder="Cari: nfc, printer, ocr, absensi…" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 3, display: { md: 'none' } }} inputProps={{ 'aria-label': 'Cari API' }} />
+            {list.length === 0 && <EmptyState title="Tidak ada hasil">Coba kata lain, mis. “lokasi” atau “printer”.</EmptyState>}
+            {list.map(([ns, feat, desc, methods, code]) => (
+              <Box key={ns} id={slug(ns)} component="section" sx={{ scrollMarginTop: 80, py: 4, borderTop: 1, borderColor: 'divider', '&:first-of-type': { borderTop: 0, pt: 0 } }}>
+                <Stack direction="row" spacing={1.5} alignItems="baseline" sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                  <Typography variant="h5" component="h2" sx={{ fontFamily: MONO, fontWeight: 500, letterSpacing: '-0.02em' }}>{ns}</Typography>
+                  <Typography variant="caption" sx={{ fontFamily: MONO }}>fitur: {feat}</Typography>
                 </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{desc}</Typography>
-                <Typography variant="caption" component="div" sx={{ fontFamily: 'monospace', mb: 1 }}>{methods}</Typography>
-                <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 2, fontSize: 12, overflow: 'auto', m: 0 }}>{code}</Box>
-              </CardContent></Card>
-            </Grid>
-          ))}
-        </Grid>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, mb: 2, maxWidth: 640 }}>{desc}</Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mb: 2 }}>
+                  {methods.split(/\s+/).filter((m) => m && m !== '·').map((m) => (
+                    <Box key={m} component="code" sx={{ fontSize: '11.5px !important' }}>{m}</Box>
+                  ))}
+                </Stack>
+                <CodeBlock>{code}</CodeBlock>
+              </Box>
+            ))}
+          </Box>
+        </Box>
       </Container>
     </>
   );

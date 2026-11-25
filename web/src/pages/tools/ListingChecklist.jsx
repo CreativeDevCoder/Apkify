@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Container, Typography, Card, CardContent, Checkbox, FormControlLabel, LinearProgress, Stack, Button, Box, TextField, MenuItem } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 
 const KEY = 'apkify:checklist';
 const APPS_KEY = 'apkify:checklist:apps';
@@ -55,8 +56,8 @@ export default function ListingChecklist() {
   const n = ALL.filter((x) => done[x]).length;
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Play Listing Checklist</Typography>
+    <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Play Listing Checklist" />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }}>
         <TextField select label="Aplikasi" value={app} onChange={(e) => setApp(e.target.value)} sx={{ minWidth: 220 }}>
           {apps.map((a) => <MenuItem key={a} value={a}>{a}</MenuItem>)}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, TextField, Grid, MenuItem, Button, Snackbar } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { Alert } from '@mui/material';
 
@@ -67,9 +68,8 @@ export default function DescriptionTemplates() {
   const copy = (t) => { navigator.clipboard?.writeText(t); setCopied(true); };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>Description Templates</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>Isi data aplikasi, pilih jenis, lalu salin deskripsi singkat (≤80) dan lengkap (≤4000 karakter) untuk Play Console.</Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Description Templates">Isi data aplikasi, pilih jenis, lalu salin deskripsi singkat (≤80) dan lengkap (≤4000 karakter) untuk Play Console.</ToolHeader>
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
           <Card><CardContent><Stack spacing={2}>

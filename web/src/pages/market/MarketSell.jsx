@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
 import {
-  Container, Typography, Card, CardContent, Stack, TextField, MenuItem, Button, Alert, Grid, FormControlLabel, Checkbox,
+  Container, Typography, Card, CardContent, Stack, TextField, MenuItem, Button, Alert, FormControlLabel, Checkbox,
   Box, IconButton, InputAdornment, LinearProgress
 } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { api, fileUrl } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -67,35 +68,35 @@ export default function MarketSell() {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>{id ? 'Edit listing' : 'Jual aplikasi'}</Typography>
+    <Container maxWidth="md" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title={id ? 'Edit listing' : 'Jual aplikasi'} crumb={['/market', 'Marketplace']}>Listing baru atau yang diubah ditinjau admin sebelum tayang.</ToolHeader>
       {status && <Typography color="text.secondary" sx={{ mb: 2 }}>Status: <b>{status}</b> {status !== 'approved' && '— listing baru/diubah ditinjau admin sebelum tayang.'}</Typography>}
       <Card><CardContent><Stack spacing={2}>
         <TextField label="Judul" value={f.title} onChange={set('title')} inputProps={{ maxLength: 80 }} required />
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Box>
             <TextField select label="Kategori" value={f.category} onChange={set('category')}>{CATS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}</TextField>
-          </Grid>
-          <Grid item xs={12} sm={6}>
+          </Box>
+          <Box>
             <TextField label="Harga" type="number" value={f.price} onChange={set('price')} helperText="0 = nego"
               InputProps={{ startAdornment: <InputAdornment position="start">Rp</InputAdornment> }} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
         <TextField label="Deskripsi" multiline minRows={6} value={f.description} onChange={set('description')} inputProps={{ maxLength: 5000 }}
           helperText="Jelaskan fitur, alasan menjual, kondisi aplikasi, dan proses serah terima." />
         <TextField label="Teknologi" value={f.tech} onChange={set('tech')} placeholder="mis. WordPress + WooCommerce, React + Firebase" />
-        <Grid container spacing={2}>
-          <Grid item xs={6}><TextField label="Pengguna aktif/bulan" type="number" value={f.monthlyUsers} onChange={set('monthlyUsers')} /></Grid>
-          <Grid item xs={6}><TextField label="Pendapatan/bulan (Rp)" type="number" value={f.monthlyRevenue} onChange={set('monthlyRevenue')} /></Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+          <Box><TextField label="Pengguna aktif/bulan" type="number" value={f.monthlyUsers} onChange={set('monthlyUsers')} /></Box>
+          <Box><TextField label="Pendapatan/bulan (Rp)" type="number" value={f.monthlyRevenue} onChange={set('monthlyRevenue')} /></Box>
+        </Box>
         <TextField label="URL demo" value={f.demoUrl} onChange={set('demoUrl')} />
         <TextField label="URL Google Play" value={f.playUrl} onChange={set('playUrl')} />
         <Typography fontWeight={700}>Yang didapat pembeli</Typography>
-        <Grid container>{INCLUDES.map(([k, label]) => (
-          <Grid item xs={12} sm={6} key={k}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>{INCLUDES.map(([k, label]) => (
+          <Box>
             <FormControlLabel label={label} control={<Checkbox checked={!!f.includes[k]} onChange={(e) => setF({ ...f, includes: { ...f.includes, [k]: e.target.checked } })} />} />
-          </Grid>
-        ))}</Grid>
+          </Box>
+        ))}</Box>
         <Typography fontWeight={700}>Gambar (maks 6)</Typography>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
           {f.imageFileIds.map((fid) => (
@@ -109,10 +110,10 @@ export default function MarketSell() {
         {up > 0 && <LinearProgress variant="determinate" value={up} />}
         {f.imageFileIds.length < 6 && <FileDrop accept="image/png,image/jpeg,image/webp" onFile={addImage} label="Tambah gambar (PNG/JPG/WebP, maks 2 MB)" />}
         <Typography fontWeight={700}>Kontak (hanya terlihat oleh pengguna yang masuk)</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}><TextField label="WhatsApp" placeholder="6281234567890" value={f.whatsapp} onChange={set('whatsapp')} /></Grid>
-          <Grid item xs={12} sm={6}><TextField label="Email" value={f.email} onChange={set('email')} /></Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Box><TextField label="WhatsApp" placeholder="6281234567890" value={f.whatsapp} onChange={set('whatsapp')} /></Box>
+          <Box><TextField label="Email" value={f.email} onChange={set('email')} /></Box>
+        </Box>
         {msg && <Alert severity={msg.type}>{msg.text}</Alert>}
         <Stack direction="row" spacing={1}>
           <Button variant="contained" size="large" disabled={busy} onClick={save}>{id ? 'Simpan perubahan' : 'Kirim listing'}</Button>

@@ -5,6 +5,7 @@ import {
   Container, Typography, Tabs, Tab, Card, Table, TableHead, TableRow, TableCell, TableBody, Switch,
   Chip, LinearProgress, TextField, Button, Stack, Alert, Box, IconButton, Tooltip, CardContent, TableContainer
 } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SaveIcon from '@mui/icons-material/Save';
 import { api } from '../../lib/api';
@@ -98,11 +99,8 @@ export default function Admin() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h4" sx={{ flex: 1 }}>Admin</Typography>
-        <IconButton onClick={load}><RefreshIcon /></IconButton>
-      </Stack>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="Admin" crumb={null} actions={<IconButton onClick={load} aria-label="Muat ulang" sx={{ border: 1, borderColor: 'divider' }}><RefreshIcon sx={{ fontSize: 18 }} /></IconButton>}>Penyedia email & penyimpanan, build terbaru, batas pemakaian, dan konten.</ToolHeader>
       {msg && <Alert severity={msg.type} onClose={() => setMsg(null)} sx={{ mb: 2 }}>{msg.text}</Alert>}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable">
         <Tab value="email" label="10 Penyedia Email" />

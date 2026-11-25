@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Container, Typography, Card, CardContent, Stack, TextField, Button, Box, Slider } from '@mui/material';
+import { ToolHeader } from '../../components/ui';
 import QRCode from 'qrcode';
 import ColorField from '../../components/ColorField';
 import { isHex } from '../../lib/validators';
@@ -18,8 +19,8 @@ export default function QrGenerator() {
   }, [text, size, fg, bg]);
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>QR Code Generator</Typography>
+    <Container maxWidth="sm" sx={{ py: { xs: 4, md: 6 } }}>
+      <ToolHeader title="QR Code Generator" />
       <Card><CardContent>
         <Stack spacing={2}>
           <TextField label="Teks / URL" value={text} onChange={(e) => setText(e.target.value)} multiline maxRows={4} />

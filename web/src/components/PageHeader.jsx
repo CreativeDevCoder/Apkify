@@ -1,12 +1,15 @@
 import { Box, Container, Typography } from '@mui/material';
+import { Eyebrow } from './ui';
 
-export default function PageHeader({ title, subtitle, children }) {
+/** Kepala halaman: ringkas, rata kiri, dipisah garis rambut — bukan banner. */
+export default function PageHeader({ title, subtitle, eyebrow, children, maxWidth = 'lg' }) {
   return (
-    <Box sx={{ background: (t) => (t.palette.mode === 'light' ? 'linear-gradient(135deg,#eef2ff,#ecfeff)' : 'linear-gradient(135deg,#1e1b4b,#083344)'), py: { xs: 5, md: 7 } }}>
-      <Container maxWidth="lg">
-        <Typography variant="h3" sx={{ fontSize: { xs: 30, md: 42 } }} gutterBottom>{title}</Typography>
-        {subtitle && <Typography variant="h6" color="text.secondary" fontWeight={400}>{subtitle}</Typography>}
-        {children}
+    <Box component="header" sx={{ borderBottom: 1, borderColor: 'divider', pt: { xs: 5, md: 8 }, pb: { xs: 4, md: 5 } }}>
+      <Container maxWidth={maxWidth}>
+        {eyebrow && <Eyebrow sx={{ mb: 1.5 }}>{eyebrow}</Eyebrow>}
+        <Typography variant="h2" component="h1" sx={{ maxWidth: 820 }}>{title}</Typography>
+        {subtitle && <Typography variant="subtitle1" sx={{ mt: 1.5, maxWidth: 680 }}>{subtitle}</Typography>}
+        {children && <Box sx={{ mt: 3 }}>{children}</Box>}
       </Container>
     </Box>
   );
